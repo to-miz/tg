@@ -1,0 +1,19 @@
+# output
+/build
+/local
+
+# IDEs and editors
+.settings/
+*.sublime-workspace
+
+# vscode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# system
+.DS_Store
+Thumbs.db
+.directory
