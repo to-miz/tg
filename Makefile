@@ -12,4 +12,4 @@ clean:
 
 run: all
 	${hide}echo Running ${tg.out}.
-	${hide}${tg.out} "tests/data/invocation.tg"
+	${hide}${tg.out} "local/data/invocation.tg"
