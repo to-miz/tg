@@ -69,7 +69,7 @@ g++ src/main.cpp -Iextern -Isrc -o build/release/tg.out -std=c++17 -O3
 ```
 ```
 PATH_TO_YOUR_VCVARSALL/vcvarsall.bat x64
-cl src/main.cpp -Iextern -Isrc -Febuild/tg.exe -std:c++17 -O2 -EHs -nologo
+cl src/main.cpp -Iextern -Isrc -Febuild/release/tg.exe -std:c++17 -O2 -EHs -nologo
 ```
 
 ## License
