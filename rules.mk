@@ -3,7 +3,7 @@ tg_src ?= src/
 tg_extern ?= extern/
 tg_executable ?= tg
 
-tg.out := ${build_dir}${tg_executable}${exe_ext}
+tg.out ?= ${build_dir}${tg_executable}${exe_ext}
 
 ${tg.out}: private options.cl.exception := -EHs
 ${tg.out}: private warnings.gcc += -Wno-missing-field-initializers
