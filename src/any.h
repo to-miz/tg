@@ -377,7 +377,7 @@ struct any_t {
     }
 };
 
-size_t snprint(char* buffer, size_t buffer_len, const PrintFormat& initial, const any_t& value) {
+int tml::snprint(char* buffer, size_t buffer_len, const tml::PrintFormat& initial, const any_t& value) {
     auto value_ptr = value.dereference();
     auto type = value_ptr->type;
     char* p = buffer;
@@ -392,10 +392,12 @@ size_t snprint(char* buffer, size_t buffer_len, const PrintFormat& initial, cons
                 if (p < last) *p++ = ' ';
             }
             not_first = true;
-            p += snprint(p, (size_t)(last - p), initial, inner);
+            auto print_result = snprint(p, (size_t)(last - p), initial, inner);
+            if (print_result < 0) return -1;
+            p += print_result;
         }
         if (p < last) *p++ = ']';
-        return (size_t)(p - buffer);
+        return (int)(p - buffer);
     }
 
     switch (type.id) {
@@ -417,9 +419,11 @@ size_t snprint(char* buffer, size_t buffer_len, const PrintFormat& initial, cons
             for (auto& inner : match.field_values) {
                 if (not_first && p < last) *p++ = ' ';
                 not_first = true;
-                p += snprint(p, (size_t)(last - p), initial, inner);
+                auto print_result = snprint(p, (size_t)(last - p), initial, inner);
+                if (print_result < 0) return -1;
+                p += print_result;
             }
-            return (size_t)(p - buffer);
+            return (int)(p - buffer);
         }
         case tid_int_range: {
             auto range = value_ptr->as_range();

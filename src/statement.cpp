@@ -36,7 +36,7 @@ struct stmt_declaration_t {
 
 struct formatted_expression_t {
     unique_expression_t expression;
-    PrintFormat format = defaultPrintFormat();
+    PrintFormat format = default_print_format();
 };
 
 struct stmt_break_continue_t {
