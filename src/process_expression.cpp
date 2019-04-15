@@ -623,6 +623,7 @@ bool infer_expression_types_concrete_expression(process_state_t*, expression_com
     // Compile time evaluated expressions should already be inferred, since otherwise they couldn't be generated in the
     // first place.
     assert(exp->result_type.id != tid_undefined);
+    MAYBE_UNUSED(exp);
     return true;
 }
 

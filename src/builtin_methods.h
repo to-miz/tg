@@ -70,6 +70,7 @@ any_t string_call_append(any_t* lhs, const vector<any_t>& arguments) {
 
 any_t string_call_lower(any_t* lhs, const vector<any_t>& arguments) {
     assert(arguments.empty());
+    MAYBE_UNUSED(arguments);
     auto& str = lhs->as_string();
     auto result = std::string(str.size(), 0);
     auto conversion = tmu_utf8_to_lower(str.data(), str.size(), result.data(), result.size());
@@ -83,6 +84,7 @@ any_t string_call_lower(any_t* lhs, const vector<any_t>& arguments) {
 
 any_t string_call_upper(any_t* lhs, const vector<any_t>& arguments) {
     assert(arguments.empty());
+    MAYBE_UNUSED(arguments);
     auto& str = lhs->as_string();
     auto result = std::string(str.size(), 0);
     auto conversion = tmu_utf8_to_upper(str.data(), str.size(), result.data(), result.size());
@@ -96,6 +98,7 @@ any_t string_call_upper(any_t* lhs, const vector<any_t>& arguments) {
 
 any_t string_call_trim(any_t* lhs, const vector<any_t>& arguments) {
     assert(arguments.empty());
+    MAYBE_UNUSED(arguments);
     auto& str = lhs->as_string();
     auto trimmed = tmsu_trim_n(str.data(), str.data() + str.size());
     return make_any(std::string(trimmed.begin(), trimmed.end()));
@@ -103,6 +106,7 @@ any_t string_call_trim(any_t* lhs, const vector<any_t>& arguments) {
 
 any_t string_call_trim_left(any_t* lhs, const vector<any_t>& arguments) {
     assert(arguments.empty());
+    MAYBE_UNUSED(arguments);
     auto& str = lhs->as_string();
 
     const char* first = str.data();
@@ -113,6 +117,7 @@ any_t string_call_trim_left(any_t* lhs, const vector<any_t>& arguments) {
 
 any_t string_call_trim_right(any_t* lhs, const vector<any_t>& arguments) {
     assert(arguments.empty());
+    MAYBE_UNUSED(arguments);
     auto& str = lhs->as_string();
 
     const char* first = str.data();
