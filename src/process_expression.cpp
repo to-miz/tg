@@ -293,7 +293,7 @@ bool infer_expression_types_builtin_function(process_state_t* state, expression_
     exp_value_category_enum value_category = exp_value_constant;
     for (size_t i = 0, count = args->size(); i < count; ++i) {
         auto arg = args->at(i).get();
-        if (arg->value_category == exp_value_runtime) {
+        if (arg->value_category != exp_value_constant) {
             value_category = exp_value_runtime;
             break;
         }
@@ -509,8 +509,13 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
     auto& inferred = exp->inferred;
     assert(inferred.empty());
 
+
     if (!lhs->result_type.is(tid_pattern, 0) && !lhs->result_type.is(tid_sum, 0)) {
         // Look for builtin properties or methods.
+
+        // FIXME: Builtin properties don't work with patterns or sums currenty.
+        // For instance you can't get the size of a pattern field that is a string.
+
         auto lhs_type = lhs->result_type;
         size_t field_index = 0;
         size_t fields_count = fields.size();
@@ -519,7 +524,8 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
 
             bool has_property = false;
             for (const auto& property : builtin_properties) {
-                auto result_type = property.has_property(lhs_type, field.contents);
+                if (field.contents != property.name) continue;
+                auto result_type = property.has_property(lhs_type);
                 if (result_type.id != tid_undefined) {
                     lhs_type = result_type;
                     has_property = true;
