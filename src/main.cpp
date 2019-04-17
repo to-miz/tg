@@ -16,6 +16,14 @@ using std::begin;
 using std::end;
 using std::move;
 using std::size_t;
+/*
+TODO:
+    - Implement a builtin abort/exit/fail function that displays an error message.
+    - Pattern matching should not be compile time only, there should be a try_match function or similar.
+FIXME:
+    - eval_expression errors do not result in returing -1 from main.
+*/
+
 using std::string;
 using std::unique_ptr;
 using std::vector;
@@ -120,6 +128,7 @@ bool parse_file(parsed_state_t* parsed, string_view filename) {
     assert(parsed);
 
     parsing_state_t parsing = {parsed};
+    parsing.current_stack_size = parsed->toplevel_stack_size;
     auto& source_files = parsed->source_files;
     assert(source_files.empty());
     source_files.push_back({/*contents=*/{}, filename, /*file_index=*/0, /*parsed=*/false});

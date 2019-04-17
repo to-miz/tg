@@ -2,6 +2,8 @@ struct cli_options {
     vector<const char*> source_files;
     const char* output_file;
     bool valid;
+
+    tmcli_args remaining;
 };
 
 enum { cli_option_output_file };
@@ -35,6 +37,8 @@ cli_options parse_cli(char const* const* args, int args_count) {
         print(stderr, "{}: No source files specified.\n", args[0]);
         result.valid = false;
     }
+
+    if (result.valid) result.remaining = tmcli_get_remaining_args(&cli_parser);
     return result;
 }
 
@@ -102,6 +106,8 @@ int main(int internal_argc, char const* internal_argv[])
     auto cli_options = parse_cli(args, args_count);
     if (!cli_options.valid) return -1;
 
+    assert(cli_options.source_files.size() > 0);
+
     parsed_state_t parsed = {};
     for (auto& source_file : cli_options.source_files) {
         if (!parse_file(&parsed, source_file)) return -1;
@@ -128,7 +134,18 @@ int main(int internal_argc, char const* internal_argv[])
 
     process_state.output.stream = output_stream.stream;
 
-    invoke_toplevel(&process_state);
+    // Prepare argv builtin global variable.
+    any_t builtin_argv;
+    {
+        vector<any_t> argv_array;
+        argv_array.push_back(make_any(cli_options.source_files[0]));
+        for (int i = 0; i < cli_options.remaining.argc; ++i) {
+            argv_array.push_back(make_any(cli_options.remaining.argv[i]));
+        }
+        builtin_argv = make_any(move(argv_array), {tid_string, 1});
+    }
+
+    invoke_toplevel(&process_state, move(builtin_argv));
 
     if (!output_stream.close()) return -1;
     return 0;

@@ -301,13 +301,20 @@ void evaluate_call(process_state_t* state, const generator_t& generator, const v
     state->set_scope(prev_scope_index);
 }
 
-void invoke_toplevel(process_state_t* state) {
+void invoke_toplevel(process_state_t* state, any_t argv) {
     assert(state);
 
     auto data = state->data;
+    assert(data->toplevel_stack_size > 0);
+
     state->set_scope(0);
     auto& current_stack = state->value_stack.emplace_back();
-    if (data->toplevel_stack_size > 0) current_stack.values.resize(data->toplevel_stack_size);
+    current_stack.values.resize(data->toplevel_stack_size);
+
+    auto argv_symbol = state->find_symbol_flat("argv", 0);
+    assert(argv_symbol);
+    current_stack.values[argv_symbol->stack_value_index] = move(argv);
+
     evaluate_segment(state, data->toplevel_segment);
     state->value_stack.pop_back();
 }

@@ -469,6 +469,7 @@ any_t make_any(string_view str) {
     result.data = data;
     return result;
 }
+any_t make_any(const char* str) { return make_any(string_view{str}); }
 any_t make_any_unescaped(string_view str) {
     auto data = new string(to_unescaped_string(str));
 
