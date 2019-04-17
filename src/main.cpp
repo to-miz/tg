@@ -58,6 +58,7 @@ bool operator!=(string_view a, string_view b) { return !tmsu_equals_n(a.begin(),
 #include "builtin_functions.h"
 #include "builtin_properties.h"
 #include "builtin_methods.h"
+#include "builtin_state.h"
 
 enum class parse_result { no_match, error, success };
 // We want the properties of enum class without the verbosity.

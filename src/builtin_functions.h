@@ -167,7 +167,7 @@ any_t builtin_min(vector<any_t>& arguments) {
     return make_any_ref(min);
 }
 
-static const builtin_function_t builtin_functions[] = {
+static const builtin_function_t internal_builtin_functions[] = {
     {"range", 1, 2, builtin_range, builtin_are_range_arguments_valid},
     {"max", 1, -1, builtin_max, builtin_are_max_arguments_valid},
     {"min", 1, -1, builtin_min, builtin_are_min_arguments_valid},

@@ -175,7 +175,7 @@ bool infer_expression_types_concrete_expression(process_state_t*, expression_con
 }
 bool infer_expression_types_concrete_expression(process_state_t* state, expression_identifier_t* exp) {
     auto identifier = exp->identifier;
-    for (const auto& entry : builtin_functions) {
+    for (const auto& entry : state->builtin.functions) {
         if (identifier == entry.name) {
             exp->result_type = {tid_function, 0};
             exp->builtin_function = &entry;
@@ -523,7 +523,7 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
             auto field = fields[field_index];
 
             bool has_property = false;
-            for (const auto& property : builtin_properties) {
+            for (const auto& property : state->builtin.properties) {
                 if (field.contents != property.name) continue;
                 auto result_type = property.has_property(lhs_type);
                 if (result_type.id != tid_undefined) {
@@ -547,7 +547,7 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
         if (field_index + 1 == fields_count) {
             // Look for methods on current reference/property.
             auto field_name = fields[field_index];
-            for (const auto& method : builtin_methods) {
+            for (const auto& method : state->builtin.methods) {
                 if (method.method_name != field_name.contents) continue;
                 if (method.has_method({lhs_type, nullptr})) {
                     exp->result_type = {tid_method, 0};
@@ -840,12 +840,12 @@ bool infer_expression_types_block(process_state_t* state, literal_block_t* block
     return true;
 }
 
-bool infer_expression_types(process_state_t state) {
-    if (!infer_expression_types_segment(&state, &state.data->toplevel_segment)) return false;
-    for (auto& unique_generator : state.data->generators) {
+bool infer_expression_types(process_state_t* state) {
+    if (!infer_expression_types_segment(state, &state->data->toplevel_segment)) return false;
+    for (auto& unique_generator : state->data->generators) {
         auto generator = unique_generator.get();
-        state.set_scope(generator->scope_index);
-        if (!infer_expression_types_block(&state, &generator->body)) return false;
+        state->set_scope(generator->scope_index);
+        if (!infer_expression_types_block(state, &generator->body)) return false;
     }
     return true;
 }

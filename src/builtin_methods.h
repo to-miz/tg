@@ -159,7 +159,7 @@ any_t string_call_split(any_t* lhs, const vector<any_t>& arguments) {
     return make_any(std::move(result), {tid_string, 1});
 }
 
-static const builtin_method_t builtin_methods[] = {
+static const builtin_method_t internal_builtin_methods[] = {
     {1, 1, "append", builtin_is_any_array, array_are_append_arguments_valid, array_call_append},
 
     {1, 1, "append", builtin_is_string, string_are_append_params_valid, string_call_append},

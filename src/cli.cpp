@@ -114,7 +114,7 @@ int main(int internal_argc, char const* internal_argv[])
     }
 
     process_state_t process_state = {&parsed};
-    if (!process_parsed_data(process_state)) return -1;
+    if (!process_parsed_data(&process_state)) return -1;
 
     output_stream_t output_stream = {stdout, "stdout", app};
     if (cli_options.output_file) {

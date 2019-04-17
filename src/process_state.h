@@ -47,11 +47,15 @@ struct process_state_t {
     parsed_state_t* data;
     int current_symbol_table = 0;
 
+    // Builtins
+    builtin_state_t builtin;
+
     // Execution/output contexts.
     vector<value_storage> value_stack;
     output_context output;
 
     process_state_t() = default;
+    process_state_t(const process_state_t&) = delete;
     process_state_t(parsed_state_t* data) : data(data) { assert(data); }
 
     int set_scope(int index) {

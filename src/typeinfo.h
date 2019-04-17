@@ -1,4 +1,4 @@
-enum typeid_enum : int8_t {
+enum typeid_enum : uint16_t {
     /* Uninitialized. */
     tid_undefined,
 
@@ -18,21 +18,24 @@ enum typeid_enum : int8_t {
     tid_int_range,
     tid_reference,
 
-    /* No Value. */
+    /* No value. */
     tid_void,
+
+    /* Custom value types. */
+    tid_custom,
 
     tid_count
 };
 
 const char* typeid_enum_strings[] = {
-    "undefined", "typename_pattern", "typename_sum", "generator", "function",  "method",    "int",
-    "bool",      "string",           "pattern",      "sum",       "int_range", "reference", "void"};
+    "undefined", "typename_pattern", "typename_sum", "generator", "function",  "method", "int",   "bool",
+    "string",    "pattern",          "sum",          "int_range", "reference", "void",   "custom"};
 static_assert(std::size(typeid_enum_strings) == (size_t)tid_count, "Missing typeid_enum_strings.");
 const char* to_string(typeid_enum id) {
-    assert(id >= 0 && id < tid_count);
+    if (id >= tid_custom) return typeid_enum_strings[tid_custom];
     return typeid_enum_strings[id];
 }
-bool is_value_type(typeid_enum id) { return id >= tid_int && id <= tid_int_range; }
+bool is_value_type(typeid_enum id) { return (id >= tid_int && id <= tid_int_range) || id >= tid_custom; }
 bool is_match_type(typeid_enum id) { return id == tid_pattern || id == tid_sum; }
 
 struct typeid_info {

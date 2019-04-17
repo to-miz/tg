@@ -28,7 +28,7 @@ any_t string_get_size_property(any_t* lhs) {
     return make_any((int)str.size());
 }
 
-static const builtin_property_t builtin_properties[] = {
+static const builtin_property_t internal_builtin_properties[] = {
     {"size", array_has_size_property, array_get_size_property},
     {"size", string_has_size_property, string_get_size_property},
 };
