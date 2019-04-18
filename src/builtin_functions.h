@@ -1,26 +1,9 @@
-struct builtin_arguments_valid_result_t {
-    bool valid;
-    int invalid_index;
-    typeid_info_match expected;
-    typeid_info_match result_type;
-};
-
-typedef any_t (*builtin_function_pointer)(vector<any_t>& arguments);
-typedef builtin_arguments_valid_result_t (*builtin_are_function_arguments_valid_pointer)(
-    const vector<typeid_info>& arguments);
-
-struct builtin_function_t {
-    string_view name;
-    int min_params;
-    int max_params;  // Can be -1 to denote open endedness.
-    builtin_function_pointer func;
-    builtin_are_function_arguments_valid_pointer are_function_arguments_valid;
-};
 
 // Builtin range function.
 
-builtin_arguments_valid_result_t builtin_are_range_arguments_valid(const vector<typeid_info>& arguments) {
-    builtin_arguments_valid_result_t result = {true, 0, {tid_int, 0}, {tid_int_range, 0}};
+builtin_arguments_valid_result_t builtin_are_range_arguments_valid(const builtin_state_t& /*state*/,
+                                                                   array_view<const typeid_info_match> arguments) {
+    builtin_arguments_valid_result_t result = {{tid_int, 0}, {tid_int_range, 0}};
     assert(arguments.size() == 1 || arguments.size() == 2);
     for (int i = 0, count = (int)arguments.size(); i < count; ++i) {
         if (!is_convertible(arguments[i], result.expected)) {
@@ -31,7 +14,7 @@ builtin_arguments_valid_result_t builtin_are_range_arguments_valid(const vector<
     }
     return result;
 }
-any_t builtin_range(vector<any_t>& arguments) {
+any_t builtin_range(array_view<any_t> arguments) {
     assert(arguments.size() == 1 || arguments.size() == 2);
     switch (arguments.size()) {
         case 1: {
@@ -55,8 +38,9 @@ any_t builtin_range(vector<any_t>& arguments) {
 
 // Builtin max function.
 
-builtin_arguments_valid_result_t builtin_are_max_arguments_valid(const vector<typeid_info>& arguments) {
-    builtin_arguments_valid_result_t result = {true, 0, {tid_int, 0}, {tid_int, 0}};
+builtin_arguments_valid_result_t builtin_are_max_arguments_valid(const builtin_state_t& /*state*/,
+                                                                 array_view<const typeid_info_match> arguments) {
+    builtin_arguments_valid_result_t result = {{tid_int, 0}, {tid_int, 0}};
 
     bool processed = false;
     if (arguments.size() == 1) {
@@ -83,25 +67,25 @@ builtin_arguments_valid_result_t builtin_are_max_arguments_valid(const vector<ty
     }
     return result;
 }
-any_t builtin_max(vector<any_t>& arguments) {
-    vector<any_t>* args = nullptr;
+any_t builtin_max(array_view<any_t> arguments) {
+    array_view<any_t> args;
     if (arguments.size() == 1) {
         auto single = arguments[0].dereference();
         if (single->is_array()) {
-            args = &single->as_array();
+            args = single->as_array();
         } else {
             assert(single->type.is(tid_int, 0));
             return make_any_ref(single);
         }
     } else {
-        args = &arguments;
+        args = arguments;
     }
 
-    if (args->empty()) return make_any(0);
+    if (args.empty()) return make_any(0);
 
-    any_t* max = args->at(0).dereference();
-    for (size_t i = 1, count = args->size(); i < count; ++i) {
-        auto entry = args->at(i).dereference();
+    any_t* max = args[0].dereference();
+    for (size_t i = 1, count = args.size(); i < count; ++i) {
+        auto entry = args[i].dereference();
         assert(max->type.is(tid_int, 0));
         assert(entry->type.is(tid_int, 0));
         if (max->i < entry->i) {
@@ -111,8 +95,9 @@ any_t builtin_max(vector<any_t>& arguments) {
     return make_any_ref(max);
 }
 
-builtin_arguments_valid_result_t builtin_are_min_arguments_valid(const vector<typeid_info>& arguments) {
-    builtin_arguments_valid_result_t result = {true, 0, {tid_int, 0}, {tid_int, 0}};
+builtin_arguments_valid_result_t builtin_are_min_arguments_valid(const builtin_state_t& /*state*/,
+                                                                 array_view<const typeid_info_match> arguments) {
+    builtin_arguments_valid_result_t result = {{tid_int, 0}, {tid_int, 0}};
 
     bool processed = false;
     if (arguments.size() == 1) {
@@ -139,25 +124,25 @@ builtin_arguments_valid_result_t builtin_are_min_arguments_valid(const vector<ty
     }
     return result;
 }
-any_t builtin_min(vector<any_t>& arguments) {
-    vector<any_t>* args = nullptr;
+any_t builtin_min(array_view<any_t> arguments) {
+    array_view<any_t> args;
     if (arguments.size() == 1) {
         auto single = arguments[0].dereference();
         if (single->is_array()) {
-            args = &single->as_array();
+            args = single->as_array();
         } else {
             assert(single->type.is(tid_int, 0));
             return make_any_ref(single);
         }
     } else {
-        args = &arguments;
+        args = arguments;
     }
 
-    if (args->empty()) return make_any(0);
+    if (args.empty()) return make_any(0);
 
-    any_t* min = args->at(0).dereference();
-    for (size_t i = 1, count = args->size(); i < count; ++i) {
-        auto entry = args->at(i).dereference();
+    any_t* min = args[0].dereference();
+    for (size_t i = 1, count = args.size(); i < count; ++i) {
+        auto entry = args[i].dereference();
         assert(min->type.is(tid_int, 0));
         assert(entry->type.is(tid_int, 0));
         if (min->i > entry->i) {
@@ -168,7 +153,7 @@ any_t builtin_min(vector<any_t>& arguments) {
 }
 
 static const builtin_function_t internal_builtin_functions[] = {
-    {"range", 1, 2, builtin_range, builtin_are_range_arguments_valid},
-    {"max", 1, -1, builtin_max, builtin_are_max_arguments_valid},
-    {"min", 1, -1, builtin_min, builtin_are_min_arguments_valid},
+    {"range", 1, 2, builtin_are_range_arguments_valid, builtin_range},
+    {"max", 1, -1, builtin_are_max_arguments_valid, builtin_max},
+    {"min", 1, -1, builtin_are_min_arguments_valid, builtin_min},
 };

@@ -274,12 +274,13 @@ bool infer_expression_types_builtin_function(process_state_t* state, expression_
         return false;
     }
 
-    vector<typeid_info> argument_types;
+    vector<typeid_info_match> argument_types;
     argument_types.resize(args->size());
     for (size_t i = 0, count = argument_types.size(); i < count; ++i) {
-        argument_types[i] = args->at(i)->result_type;
+        auto arg = args->at(i).get();
+        argument_types[i] = {arg->result_type, arg->definition};
     }
-    auto args_result = func->are_function_arguments_valid(argument_types);
+    auto args_result = func->check(state->builtin, argument_types);
     if (!args_result.valid) {
         auto expected = to_string(args_result.expected);
         auto given = to_string(argument_types[args_result.invalid_index]);
@@ -368,14 +369,14 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
 
         exp_value_category_enum category = exp->lhs->value_category;
         vector<typeid_info_match> argument_types;
+        argument_types.push_back({lhs->result_type, lhs->definition});
         argument_types.resize(args.size());
         for (size_t i = 0, count = argument_types.size(); i < count; ++i) {
             auto arg = args[i].get();
             argument_types[i] = {arg->result_type, arg->definition};
             if (arg->value_category != exp_value_constant) category = exp_value_runtime;
         }
-        auto method_args_result =
-            inferred_method.method->are_method_arguments_valid({lhs->result_type, lhs->definition}, argument_types);
+        auto method_args_result = inferred_method.method->check(state->builtin, argument_types);
         if (!method_args_result.valid) {
             auto expected = to_string(method_args_result.expected);
             auto given = to_string(argument_types[method_args_result.invalid_index]);

@@ -55,9 +55,10 @@ bool operator!=(string_view a, string_view b) { return !tmsu_equals_n(a.begin(),
 #include "typeinfo.h"
 #include "match_type_definition.h"
 #include "any.h"
+
+#include "builtin_type.h"
 #include "builtin_functions.h"
-#include "builtin_properties.h"
-#include "builtin_methods.h"
+#include "builtin_array.cpp"
 #include "builtin_state.h"
 
 enum class parse_result { no_match, error, success };

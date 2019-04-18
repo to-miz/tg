@@ -151,13 +151,15 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_call
         argument_locations.emplace_back(arg->location);
     }
     if (exp->method) {
-        return exp->method->call_method(lhs, arguments);
+        // Add this pointer to arguments.
+        arguments.insert(arguments.begin(), make_any_ref(lhs));
+        return exp->method->call(arguments);
     }
     assert(lhs->type.is_callable());
     switch (lhs->type.id) {
         case tid_function: {
             auto builtin_function = lhs->as_function();
-            return builtin_function->func(arguments);
+            return builtin_function->call(arguments);
         }
         case tid_generator: {
             auto generator = lhs->as_generator();
@@ -250,7 +252,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_dot_
             }
             case inferred_field_t::ft_property: {
                 assert(concrete.property);
-                value_ref = concrete.property->get_property(value);
+                value_ref = concrete.property->call({value, 1});
                 break;
             }
             case inferred_field_t::ft_method: {
