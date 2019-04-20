@@ -42,6 +42,39 @@ using std::min;
 
 #define UNREFERENCED_PARAM(x) ((void)x)
 #define MAYBE_UNUSED(x) ((void)x)
+// clang-format off
+#ifdef _DEBUG
+    #ifdef _MSC_VER
+        #define debug_break __debugbreak
+        #define break_if(x)            \
+            {                          \
+                if (x) __debugbreak(); \
+            }
+    #elif defined(_WIN32)
+        #define debug_break DebugBreak
+        #define break_if(x)          \
+            {                        \
+                if (x) DebugBreak(); \
+            }
+    #else
+        #include <signal.h>
+        #define debug_break() raise(SIGTRAP)
+        #define break_if(x)            \
+            {                          \
+                if (x) raise(SIGTRAP); \
+            }
+    #endif
+
+    #define DEBUG_WRAPPER(x) \
+        do {                 \
+            x;               \
+        } while (false)
+#else
+    #define DEBUG_WRAPPER(x) ((void)0)
+    #define break_if(x) ((void)0)
+    #define debug_break() ((void)0)
+#endif
+// clang-format on
 
 bool operator==(string_view a, string_view b) { return tmsu_equals_n(a.begin(), a.end(), b.begin(), b.end()); }
 bool operator!=(string_view a, string_view b) { return !tmsu_equals_n(a.begin(), a.end(), b.begin(), b.end()); }
@@ -59,6 +92,7 @@ bool operator!=(string_view a, string_view b) { return !tmsu_equals_n(a.begin(),
 #include "builtin_type.h"
 #include "builtin_functions.h"
 #include "builtin_array.cpp"
+#include "builtin_string.cpp"
 #include "builtin_state.h"
 
 enum class parse_result { no_match, error, success };

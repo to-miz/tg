@@ -369,11 +369,11 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
 
         exp_value_category_enum category = exp->lhs->value_category;
         vector<typeid_info_match> argument_types;
-        argument_types.push_back({lhs->result_type, lhs->definition});
-        argument_types.resize(args.size());
-        for (size_t i = 0, count = argument_types.size(); i < count; ++i) {
+        argument_types.resize(args.size() + 1);
+        argument_types[0] = {lhs->result_type, lhs->definition};
+        for (size_t i = 0, count = args.size(); i < count; ++i) {
             auto arg = args[i].get();
-            argument_types[i] = {arg->result_type, arg->definition};
+            argument_types[i + 1] = {arg->result_type, arg->definition};
             if (arg->value_category != exp_value_constant) category = exp_value_runtime;
         }
         auto method_args_result = inferred_method.method->check(state->builtin, argument_types);
@@ -489,140 +489,97 @@ bool get_common_field_type_from_sum(process_state_t* state, const type_sum* sum,
 
 bool infer_expression_types_concrete_expression(process_state_t* state, expression_dot_t* exp) {
     if (!infer_expression_types_expression(state, exp->lhs.get())) return false;
-    auto lhs = exp->lhs.get();
-    // Strings have dot operators, ints etc might get some too at some point.
-#if 0
-    if (lhs->type_definition_index < 0 && lhs->result_type.array_level <= 0) {
-        auto type = to_string(lhs->result_type);
-        auto msg = print_string("Expression with type \"%s\" does not have a dot operator.", type.data);
-        print_error_context(msg, state->file, lhs->location, lhs->location.length);
-        return false;
-    }
-#endif
 
+    // Error printing helper.
     auto print_field_error = [](const process_state_t* state, typeid_info type, string_token field) {
         auto match_type = to_string(type);
         auto msg = print_string("Type %s has no field \"%.*s\".", match_type.data, PRINT_SW(field.contents));
         print_error_context(msg, {state, field});
     };
 
+    auto lhs = exp->lhs.get();
     auto& fields = exp->fields;
     auto& inferred = exp->inferred;
     assert(inferred.empty());
 
+    typeid_info_match lhs_type = {lhs->result_type, lhs->definition};
 
-    if (!lhs->result_type.is(tid_pattern, 0) && !lhs->result_type.is(tid_sum, 0)) {
-        // Look for builtin properties or methods.
+    for (size_t field_index = 0, fields_count = fields.size(); field_index < fields_count; ++field_index) {
+        // The field we are trying to access of an instance of type 'lhs_type'.
+        auto field = fields[field_index];
 
-        // FIXME: Builtin properties don't work with patterns or sums currenty.
-        // For instance you can't get the size of a pattern field that is a string.
-
-        auto lhs_type = lhs->result_type;
-        size_t field_index = 0;
-        size_t fields_count = fields.size();
-        for (; field_index < fields_count; ++field_index) {
-            auto field = fields[field_index];
-
-            bool has_property = false;
-            for (const auto& property : state->builtin.properties) {
-                if (field.contents != property.name) continue;
-                auto result_type = property.has_property(lhs_type);
-                if (result_type.id != tid_undefined) {
-                    lhs_type = result_type;
-                    has_property = true;
-                    inferred.emplace_back(lhs_type, &property);
-                    break;
+        if (lhs_type.array_level == 0 && (lhs_type.id == tid_pattern || lhs_type.id == tid_sum)) {
+            auto definition = lhs_type.definition;
+            assert(definition);
+            if (definition->type == td_pattern) {
+                auto pattern = &definition->pattern;
+                auto match_index = pattern->find_match_index_from_field_name(field.contents);
+                if (match_index < 0) {
+                    auto msg = print_string("Pattern \"%.*s\" does not have a field named \"%.*s\".",
+                                            PRINT_SW(definition->name.contents), PRINT_SW(field.contents));
+                    print_error_context(msg, {state, field});
+                    print_error_context("See pattern for context.", {state, definition->name});
+                    return false;
                 }
+                auto match = &pattern->match_entries[match_index];
+                if (match->type == mt_custom) {
+                    definition = match->match.custom;
+                    inferred.emplace_back(typeid_from_definition(*definition), definition);
+                    continue;
+                }
+
+                lhs_type = {match->match.type, definition};
+                inferred.emplace_back(match->match.type, definition);
+            } else if (definition->type == td_sum) {
+                common_sum_type common = {};
+                if (!get_common_field_type_from_sum(state, &definition->sum, definition->name, field, &common)) {
+                    return false;
+                }
+                if (common.definition) {
+                    definition = common.definition;
+                    inferred.emplace_back(typeid_from_definition(*definition), definition);
+                    continue;
+                }
+
+                lhs_type = {common.type, definition};
+                inferred.emplace_back(common.type, definition);
+            } else {
+                assert(0);
+                print_error_type(internal_error, {state, exp->location});
+                return false;
+            }
+        } else {
+            // Builtin property.
+            auto builtin = state->builtin.get_builtin_type(lhs_type);
+            if (!builtin) {
+                print_field_error(state, lhs_type, field);
+                return false;
             }
 
-            if (!has_property) break;
-        }
-
-        if (field_index == fields_count) {
-            exp->result_type = lhs_type;
-            assert(fields.size() == inferred.size());
-            return true;
-        }
-
-        // If field_index isn't the last entry of the dot expression, it cannot be a method.
-        if (field_index + 1 == fields_count) {
-            // Look for methods on current reference/property.
-            auto field_name = fields[field_index];
-            for (const auto& method : state->builtin.methods) {
-                if (method.method_name != field_name.contents) continue;
-                if (method.has_method({lhs_type, nullptr})) {
+            // If field_index isn't the last entry of the dot expression, it cannot be a method.
+            if (field_index + 1 == fields_count) {
+                // Look for methods on current reference/property.
+                if (auto method = builtin->get_method(field.contents)) {
                     exp->result_type = {tid_method, 0};
-                    inferred.emplace_back(exp->result_type, &method);
+                    inferred.emplace_back(exp->result_type, method);
                     assert(fields.size() == inferred.size());
                     return true;
                 }
             }
-        }
 
-        print_field_error(state, lhs_type, fields[field_index]);
-        return false;
-    }
-
-    assert(lhs->result_type.is(tid_pattern, 0) || lhs->result_type.is(tid_sum, 0));
-
-    auto definition = lhs->definition;
-    assert(definition);
-    assert(definition->finalized);
-    assert(definition->type == td_pattern || definition->type == td_sum);
-
-    for (size_t i = 0, count = fields.size(); i < count; ++i) {
-        auto field = fields[i];
-
-        assert(definition);
-        assert(definition->finalized);
-
-        if (definition->type == td_pattern) {
-            auto pattern = &definition->pattern;
-            auto match_index = pattern->find_match_index_from_field_name(field.contents);
-            if (match_index < 0) {
-                auto msg = print_string("Pattern \"%.*s\" does not have a field named \"%.*s\".",
-                                        PRINT_SW(definition->name.contents), PRINT_SW(field.contents));
-                print_error_context(msg, {state, field});
-                print_error_context("See pattern for context.", {state, definition->name});
+            auto property = builtin->get_property(field.contents);
+            if (!property) {
+                print_field_error(state, lhs_type, field);
                 return false;
             }
-            auto match = &pattern->match_entries[match_index];
-            if (match->type == mt_custom) {
-                definition = match->match.custom;
-                inferred.emplace_back(typeid_from_definition(*definition), definition);
-                continue;
-            } else if (i + 1 < count) {
-                print_field_error(state, match->match.type, fields[i + 1]);
-                return false;
-            }
-
-            exp->result_type = match->match.type;
-            inferred.emplace_back(match->match.type, definition);
-            assert(exp->result_type.id != tid_undefined);
-            assert(i + 1 == count);
-        } else if (definition->type == td_sum) {
-            common_sum_type common = {};
-            if (!get_common_field_type_from_sum(state, &definition->sum, definition->name, field, &common)) {
-                return false;
-            }
-            if (common.definition) {
-                definition = common.definition;
-                inferred.emplace_back(typeid_from_definition(*definition), definition);
-                continue;
-            }
-            if (i + 1 < count) {
-                print_field_error(state, common.type, fields[i + 1]);
-                return false;
-            }
-
-            exp->result_type = common.type;
-            inferred.emplace_back(common.type, definition);
-            assert(exp->result_type.id != tid_undefined);
-            assert(i + 1 == count);
-        } else {
-            assert(0);
+            lhs_type = property->result_type;
+            inferred.emplace_back(lhs_type, property);
         }
     }
+
+    exp->result_type = lhs_type;
+    assert(fields.size() == inferred.size());
+    assert(exp->result_type.id != tid_undefined);
     return true;
 }
 

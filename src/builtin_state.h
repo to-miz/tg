@@ -7,6 +7,7 @@ struct builtin_state_t {
 
     builtin_state_t() : functions(std::begin(internal_builtin_functions), std::end(internal_builtin_functions)) {
         init_builtin_array(&array_type);
+        init_builtin_string(&string_type);
     }
 
     const builtin_type_t* get_builtin_type(typeid_info type) {

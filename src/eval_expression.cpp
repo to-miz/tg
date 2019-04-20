@@ -234,16 +234,8 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_dot_
                     auto pattern = &definition->pattern;
                     auto field_index = pattern->find_field_index(field.contents);
                     assert(field_index >= 0);
-                    auto match_index = pattern->fields[field_index].match_index;
 
-                    auto match_entry = &pattern->match_entries[match_index];
-                    if (match_entry->type == mt_custom) {
-                        value_ref = make_any_ref(&match->field_values[field_index]);
-                        continue;
-                    }
-
-                    assert(i + 1 == count);
-                    return make_any_ref(&match->field_values[field_index]);
+                    value_ref = make_any_ref(&match->field_values[field_index]);
                 } else {
                     // There can't be an instance of a sum type, it is always a concrete matched pattern.
                     assert(0 && "Internal error.");

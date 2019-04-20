@@ -57,6 +57,7 @@ struct builtin_function_t {
 
 struct builtin_property_t {
     string_view name;
+    typeid_info_match result_type;
     builtin_call_pointer call;
 };
 
@@ -65,4 +66,17 @@ struct builtin_type_t {
     vector<builtin_property_t> properties;
     vector<builtin_function_t> methods;
     vector<builtin_operator_t> operators;
+
+    const builtin_property_t* get_property(string_view entry_name) const {
+        for (auto& entry : properties) {
+            if (entry.name == entry_name) return &entry;
+        }
+        return nullptr;
+    }
+    const builtin_function_t* get_method(string_view entry_name) const {
+        for (auto& entry : methods) {
+            if (entry.name == entry_name) return &entry;
+        }
+        return nullptr;
+    }
 };

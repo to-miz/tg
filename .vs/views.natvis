@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="string_view">
+    <DisplayString>{ptr,[sz]sb}</DisplayString>
+    <StringView>ptr,[sz]sb</StringView>
+  </Type>
+
+  <Type Name="array_view&lt;*&gt;">
+    <DisplayString>{{Count = {sz}}}</DisplayString>
+    <Expand>
+    	<Item Name="[size]">sz</Item>
+    	<ArrayItems>
+      		<Size>sz</Size>
+      		<ValuePointer>ptr</ValuePointer>
+    	</ArrayItems>
+  	</Expand>
+  </Type>
+</AutoVisualizer>
