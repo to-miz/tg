@@ -58,3 +58,6 @@ int snprint(char* buffer, size_t buffer_len, const PrintFormat& initial, const a
 #define TMP_HAS_CONSTEXPR_IF
 #include <tm/tm_print.h>
 using namespace tml;
+
+#define TM_JSON_IMPLEMENTATION
+#include <tm/tm_json.h>

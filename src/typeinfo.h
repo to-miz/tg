@@ -62,6 +62,7 @@ struct match_type_definition_t;
 struct typeid_info_match : typeid_info {
     const match_type_definition_t* definition;
 };
+bool is_custom_type(typeid_info type) { return type.array_level == 0 && type.id >= tid_custom; }
 
 static_string to_string(typeid_info info) {
     static_string result = {};

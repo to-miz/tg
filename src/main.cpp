@@ -93,6 +93,7 @@ bool operator!=(string_view a, string_view b) { return !tmsu_equals_n(a.begin(),
 #include "builtin_functions.h"
 #include "builtin_array.cpp"
 #include "builtin_string.cpp"
+#include "json_extension.cpp"
 #include "builtin_state.h"
 
 enum class parse_result { no_match, error, success };
@@ -174,7 +175,5 @@ bool parse_file(parsed_state_t* parsed, string_view filename) {
     }
     return false;
 }
-
-// #include "debug_printing.h"
 
 #include "cli.cpp"

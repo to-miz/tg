@@ -1,4 +1,3 @@
-
 struct builtin_state_t {
     builtin_type_t array_type;
     builtin_type_t string_type;
