@@ -3,7 +3,7 @@
 
 builtin_arguments_valid_result_t builtin_are_range_arguments_valid(const builtin_state_t& /*state*/,
                                                                    array_view<const typeid_info_match> arguments) {
-    builtin_arguments_valid_result_t result = {{tid_int, 0}, {tid_int_range, 0}};
+    builtin_arguments_valid_result_t result = {{tid_int, 0, nullptr}, {tid_int_range, 0, nullptr}};
     assert(arguments.size() == 1 || arguments.size() == 2);
     for (int i = 0, count = (int)arguments.size(); i < count; ++i) {
         if (!is_convertible(arguments[i], result.expected)) {
