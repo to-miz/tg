@@ -1,6 +1,5 @@
 struct nested_for_statement_entry {
-    int index;
-    range_t range;
+    bool last;
 };
 
 struct output_whitespace_context {

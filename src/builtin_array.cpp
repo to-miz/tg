@@ -34,4 +34,5 @@ void init_builtin_array(builtin_type_t* type) {
     type->name = "array";
     type->properties = {{"size", {tid_int, 0}, array_get_size_property}};
     type->methods = {{"append", 1, 1, array_are_append_arguments_valid, array_call_append}};
+    type->is_iteratable = true;
 }

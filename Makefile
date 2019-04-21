@@ -26,4 +26,4 @@ clean:
 
 run: all
 	${hide}echo Running ${tg.out}.
-	${hide}${tg.out} "local/data/invocation.tg" -- test
+	${hide}${tg.out} "local/data/invocation.tg" -- "local/data/test.json"

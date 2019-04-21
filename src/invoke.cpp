@@ -155,9 +155,9 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
                     auto& array = container->as_array();
                     // if (array.size()) output_newlines(out);
                     auto array_size = (int)array.size();
-                    out->nested_for_statements[block_index] = {0, {0, array_size}};
+                    out->nested_for_statements[block_index] = {true};
                     for (int i = 0; i < array_size; ++i) {
-                        out->nested_for_statements[block_index].index = i;
+                        out->nested_for_statements[block_index].last = (i + 1 == array_size);
                         stack.back().values[symbol->stack_value_index] = make_any_ref(&array[i]);
                         auto nested_result = evaluate_literal_body(state, body);
                         if (nested_result.type != eval_result::resume_result) {
@@ -173,10 +173,10 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
                 } else if (container->type.is(tid_int_range, 0)) {
                     any_t index_value;
                     auto range = container->as_range();
-                    out->nested_for_statements[block_index] = {range.min, range};
+                    out->nested_for_statements[block_index] = {true};
                     for (int i = range.min; i < range.max; ++i) {
                         index_value = make_any(i);
-                        out->nested_for_statements[block_index].index = i;
+                        out->nested_for_statements[block_index].last = (i + 1 == range.max);
                         stack.back().values[symbol->stack_value_index] = make_any_ref(&index_value);
                         auto nested_result = evaluate_literal_body(state, body);
                         i = index_value.convert_to_int();  // Get back value from script.
@@ -190,6 +190,28 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
                             }
                             if (nested_result.type == eval_result::break_result) break;
                         }
+                    }
+                } else if(is_custom_type(container->type)) {
+                    auto iterateble = container->as_custom()->to_iterateble();
+                    assert(iterateble);
+                    out->nested_for_statements[block_index] = {true};
+                    auto current = iterateble->next();
+                    while (current.type.id != tid_undefined) {
+                        auto next = iterateble->next();
+                        out->nested_for_statements[block_index].last = (next.type.id == tid_undefined);
+
+                        stack.back().values[symbol->stack_value_index] = make_any_ref(&current);
+                        auto nested_result = evaluate_literal_body(state, body);
+                        if (nested_result.type != eval_result::resume_result) {
+                            // If level is > 0 we have to break no matter what,
+                            // since a statement like 'continue 1;' is a break and a continue.
+                            if (nested_result.level > 0) {
+                                result = {nested_result.type, nested_result.level - 1};
+                                break;
+                            }
+                            if (nested_result.type == eval_result::break_result) break;
+                        }
+                        current = move(next);
                     }
                 } else {
                     assert(0 && "For statement with wrong container type.");
@@ -211,10 +233,10 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
 
                 auto last_index = (int)out->nested_for_statements.size();
                 auto iteration = out->nested_for_statements[comma.index];
-                bool not_last = (iteration.index + 1 < iteration.range.max);
+                bool not_last = !iteration.last;
                 for (int i = comma.index + 1; i < last_index; ++i) {
                     iteration = out->nested_for_statements[i];
-                    not_last = not_last || (iteration.index + 1 < iteration.range.max);
+                    not_last = not_last || !iteration.last;
                 }
                 if (not_last) {
                     output_string(out, (comma.space_after) ? ", " : ",", statement.spaces);

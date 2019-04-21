@@ -175,12 +175,10 @@ bool infer_expression_types_concrete_expression(process_state_t*, expression_con
 }
 bool infer_expression_types_concrete_expression(process_state_t* state, expression_identifier_t* exp) {
     auto identifier = exp->identifier;
-    for (const auto& entry : state->builtin.functions) {
-        if (identifier == entry.name) {
-            exp->result_type = {tid_function, 0};
-            exp->builtin_function = &entry;
-            return true;
-        }
+    if (auto function = state->builtin.get_builtin_function(identifier)) {
+        exp->result_type = {tid_function, 0};
+        exp->builtin_function = function;
+        return true;
     }
     auto symbol = state->find_symbol(exp->identifier);
     if (!symbol) {
@@ -748,12 +746,20 @@ bool infer_expression_types_segment(process_state_t* state, formatted_segment_t*
 
                 auto container = for_stmt->container_expression.get();
                 if (!infer_expression_types_expression(state, container)) return false;
+                // Int ranges are iteratable by default.
+                if (!container->result_type.is(tid_int_range, 0)) {
+                    auto container_type = state->builtin.get_builtin_type(container->result_type);
+                    if (!container_type || !container_type->is_iteratable) {
+                        print_error_context("Expression is not iterateble.", {state, container->location});
+                        return false;
+                    }
+                }
                 auto symbol = state->find_symbol_flat(for_stmt->variable, for_stmt->scope_index);
                 assert(symbol);
                 if (symbol->type.id == tid_undefined) {
                     symbol->type = get_dereferenced_type(container->result_type);
                     if (symbol->type.id == tid_undefined) {
-                        print_error_context("Expression is not an array.", {state, container->location});
+                        print_error_context("Expression is not an iterateble.", {state, container->location});
                         return false;
                     }
                     if (container->definition) symbol->definition = container->definition;

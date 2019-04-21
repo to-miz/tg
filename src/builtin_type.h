@@ -1,8 +1,8 @@
 struct builtin_arguments_valid_result_t {
     bool valid = true;
-    int invalid_index = 0;
-    typeid_info_match expected = {};
-    typeid_info_match result_type = {};
+    int invalid_index = 0;               // On error: Holds the index of the invalid argument.
+    typeid_info_match expected = {};     // On error: What the expected type of the argument was.
+    typeid_info_match result_type = {};  // On success: Return type.
 
     builtin_arguments_valid_result_t() = default;
     builtin_arguments_valid_result_t(typeid_info_match expected, typeid_info_match result_type)
@@ -66,6 +66,8 @@ struct builtin_type_t {
     vector<builtin_property_t> properties;
     vector<builtin_function_t> methods;
     vector<builtin_operator_t> operators;
+
+    bool is_iteratable = false;
 
     const builtin_property_t* get_property(string_view entry_name) const {
         for (auto& entry : properties) {

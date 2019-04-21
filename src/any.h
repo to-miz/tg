@@ -17,15 +17,29 @@ struct range_t {
 
 struct builtin_function_t;
 struct generator_t;
+struct custom_base_t;
+
+struct custom_iterator_t {
+    virtual ~custom_iterator_t() = 0 {};
+    virtual any_t next() = 0;
+};
 
 struct custom_base_t {
-    virtual ~custom_base_t() = 0;
+    virtual ~custom_base_t() = 0 {};
 
     virtual custom_base_t* clone() const = 0;
     virtual typeid_info type() const = 0;
 
-    // Should return -1 on error, required size if buffer_len is not enough and written amount on success.
-    virtual int print_to_string(char* buffer, size_t buffer_len, const tml::PrintFormat& initial) const = 0;
+    // Optional: Should return -1 on error, required size if buffer_len is not enough and written amount on success.
+    virtual int print_to_string(char* buffer, size_t buffer_len, const tml::PrintFormat& initial) const {
+        MAYBE_UNUSED(buffer);
+        MAYBE_UNUSED(buffer_len);
+        MAYBE_UNUSED(initial);
+        return -1;
+    };
+
+    // Optional: Only used when custom type is iterateble.
+    virtual std::unique_ptr<custom_iterator_t> to_iterateble() const { return {}; }
 };
 
 struct any_t {
@@ -423,8 +437,9 @@ int tml::snprint(char* buffer, size_t buffer_len, const tml::PrintFormat& initia
                 if (p < last) *p++ = ' ';
             }
             not_first = true;
-            auto print_result = snprint(p, (size_t)(last - p), initial, inner);
-            if (print_result < 0) return -1;
+            auto remaining = (size_t)(last - p);
+            auto print_result = snprint(p, remaining, initial, inner);
+            if (print_result < 0 || (size_t)print_result >= remaining) return -1;
             p += print_result;
         }
         if (p < last) *p++ = ']';
@@ -549,6 +564,15 @@ any_t make_any(const generator_t* generator) {
     any_t result = {};
     result.type = {tid_generator, 0};
     result.data = (void*)generator;
+    return result;
+}
+
+any_t make_any_custom(custom_base_t* custom) {
+    assert(custom);
+    any_t result = {};
+    result.type = custom->type();
+    assert(is_custom_type(result.type));
+    result.data = custom;
     return result;
 }
 

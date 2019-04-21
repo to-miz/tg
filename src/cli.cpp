@@ -89,6 +89,13 @@ int main(int internal_argc, char const* internal_argv[])
 {
     stderr_flush_guard_t stderr_flush_guard;
 
+#if defined(_MSC_VER) && defined(_WIN32) && defined(_DEBUG)
+    /* Set up leak detection. */
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG);
+    /* _CrtSetBreakAlloc(xxx); */ /* Used to break on a specific allocation in the debugger. */
+#endif
+
 #ifdef _WIN32
     // Get Utf-8 command line using tm_unicode.
     auto utf8_cl_result = tmu_utf8_command_line_from_utf16_managed(internal_argv, internal_argc);
