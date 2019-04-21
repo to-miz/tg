@@ -71,16 +71,33 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
 
     switch (exp->type) {
         case exp_subscript: {
-            if (lhs->result_type.array_level <= 0) {
-                print_error_context("Expression is not an array.", {state, lhs->location});
-                return false;
+            const bool is_array = (lhs->result_type.array_level > 0);
+            const builtin_operator_t* subscript = nullptr;
+            if (!is_array) {
+                auto builtin = state->builtin.get_builtin_type(lhs->result_type);
+                if (!builtin || (subscript = builtin->get_operator(bop_subscript)) == nullptr) {
+                    print_error_context("Expression is not an array.", {state, lhs->location});
+                    return false;
+                }
             }
-            exp->result_type = get_dereferenced_type(lhs->result_type);
+            if (is_array) {
+                exp->result_type = get_dereferenced_type(lhs->result_type);
+            } else {
+                assert(subscript);
+                const typeid_info_match types[2] = {{lhs->result_type, lhs->definition},
+                                                    {rhs->result_type, rhs->definition}};
+                auto check_result = subscript->check(state->builtin, types);
+                if (!check_result.valid) {
+                    print_error_type(conversion, {state, rhs->location}, rhs->result_type, check_result.expected);
+                    return false;
+                }
+                exp->result_type = check_result.result_type;
+            }
             exp->definition = lhs->definition;
 
             // Determine wheter value category is reference.
             // This can only happen at this stage and not while parsing, because the symbol table is only now available.
-            if (lhs->value_category == exp_value_reference) {
+            if (is_array && (lhs->value_category == exp_value_reference)) {
                 // One of these cases:
                 // array[0] <- reference
                 // array[index] <- reference

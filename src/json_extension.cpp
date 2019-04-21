@@ -1,8 +1,5 @@
 // Wrap all types that we want to expose to the language.
-enum json_extension_types : typeid_enum_underlying {
-    tid_json_document = tid_custom,
-    tid_json_value
-};
+enum json_extension_types : typeid_enum_underlying { tid_json_document = tid_custom, tid_json_value };
 
 struct wrapped_json_document final : custom_base_t {
     JsonAllocatedDocument doc;
@@ -121,7 +118,7 @@ int print_json_value(char* buffer, size_t buffer_len, const tml::PrintFormat& in
 }
 
 struct wrapped_json_value final : custom_base_t {
-    JsonValue value;
+    JsonValue value = {};
 
     wrapped_json_value() = default;
     explicit wrapped_json_value(JsonValue value) : value(value) {}
@@ -178,7 +175,7 @@ any_t read_json_document_call(array_view<any_t> arguments) {
 }
 
 builtin_arguments_valid_result_t json_bool_result_check(const builtin_state_t& /*state*/,
-                                                     array_view<const typeid_info_match> arguments) {
+                                                        array_view<const typeid_info_match> arguments) {
     builtin_arguments_valid_result_t result = {{tid_undefined, 0}, {tid_bool, 0}};
     assert(arguments.size() == 1);
     assert(arguments[0].is(tid_json_value, 0));
@@ -224,8 +221,50 @@ void init_builtin_json_document(builtin_type_t* type) {
     };
 }
 
+// Operators
+
+builtin_arguments_valid_result_t json_subscript_operator_check(const builtin_state_t& /*state*/,
+                                                               array_view<const typeid_info_match> arguments) {
+    builtin_arguments_valid_result_t result = {{tid_string, 0}, {tid_json_value, 0}};
+    assert(arguments.size() == 2);
+    assert(arguments[0].is(tid_json_value, 0));
+    if (!arguments[1].is(tid_string, 0) && !is_convertible(arguments[1], {tid_int, 0})) {
+        result.valid = false;
+        result.invalid_index = 1;
+    }
+    return result;
+}
+
+any_t json_subscript_operator_call(array_view<any_t> arguments) {
+    assert(arguments.size() == 2);
+    auto lhs = arguments[0].dereference();
+    assert(lhs->type.is(tid_json_value, 0));
+    auto json = static_cast<wrapped_json_value*>(lhs->as_custom());
+
+    auto inner = new wrapped_json_value{};
+    auto key = arguments[1].dereference();
+    if (key->type.is(tid_string, 0)) {
+        inner->value = json->value.getObject()[string_view{key->as_string()}];
+    } else if (int index = 0; key->try_convert_to_int(&index)) {
+        if (json->value.type == JVAL_OBJECT) {
+            auto object = json->value.getObject();
+            if (index >= 0 && (size_t)index < object.count) {
+                inner->value = object.nodes[index].value;
+            }
+        } else if (json->value.type == JVAL_ARRAY) {
+            inner->value = json->value.getArray()[index];
+        }
+    }
+    return make_any_custom(inner);
+}
+
+// Init
+
 void init_builtin_json_value(builtin_type_t* type) {
     type->name = "json_value";
+    type->operators = {
+        {bop_subscript, json_subscript_operator_check, json_subscript_operator_call},
+    };
     type->properties = {
         {"size", {tid_int, 0}, json_value_size_call},
     };

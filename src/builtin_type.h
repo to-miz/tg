@@ -69,6 +69,13 @@ struct builtin_type_t {
 
     bool is_iteratable = false;
 
+    const builtin_operator_t* get_operator(builtin_operator_type_enum op) const {
+        for (auto& entry : operators) {
+            if (entry.type == op) return &entry;
+        }
+        return nullptr;
+    }
+
     const builtin_property_t* get_property(string_view entry_name) const {
         for (auto& entry : properties) {
             if (entry.name == entry_name) return &entry;
