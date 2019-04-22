@@ -43,6 +43,11 @@ using std::min;
 #define UNREFERENCED_PARAM(x) ((void)x)
 #define MAYBE_UNUSED(x) ((void)x)
 // clang-format off
+#ifndef NDEBUG
+    #define assert_maybe_unused(x) assert(x)
+#else
+    #define assert_maybe_unused(x) ((void)(x))
+#endif
 #ifdef _DEBUG
     #ifdef _MSC_VER
         #define debug_break __debugbreak
@@ -75,6 +80,8 @@ using std::min;
     #define debug_break() ((void)0)
 #endif
 // clang-format on
+
+inline bool is_valid_index(size_t size, int index) { return index >= 0 && (size_t)index < size; }
 
 bool operator==(string_view a, string_view b) { return tmsu_equals_n(a.begin(), a.end(), b.begin(), b.end()); }
 bool operator!=(string_view a, string_view b) { return !tmsu_equals_n(a.begin(), a.end(), b.begin(), b.end()); }

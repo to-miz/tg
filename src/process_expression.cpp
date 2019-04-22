@@ -76,7 +76,7 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
             if (!is_array) {
                 auto builtin = state->builtin.get_builtin_type(lhs->result_type);
                 if (!builtin || (subscript = builtin->get_operator(bop_subscript)) == nullptr) {
-                    print_error_context("Expression is not an array.", {state, lhs->location});
+                    print_error_context("Expression is not subscriptable.", {state, lhs->location});
                     return false;
                 }
             }

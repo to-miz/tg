@@ -31,6 +31,21 @@ builtin_arguments_valid_result_t string_no_arguments_method(const builtin_state_
     return result;
 }
 
+builtin_arguments_valid_result_t string_bool_result_check(const builtin_state_t& /*state*/,
+                                                          array_view<const typeid_info_match> arguments) {
+    assert(arguments.size() == 1);
+    assert(arguments[0].is(tid_string, 0));
+    builtin_arguments_valid_result_t result = {{tid_string, 0, nullptr}, {tid_bool, 0, nullptr}};
+    return result;
+}
+
+any_t string_empty_call(array_view<any_t> arguments) {
+    assert(arguments.size() == 1);
+    auto lhs = arguments[0].dereference();
+    auto& str = lhs->as_string();
+    return make_any(str.empty());
+}
+
 any_t string_get_size_property(array_view<any_t> arguments) {
     assert(arguments.size() == 1);
     auto lhs = arguments[0].dereference();
@@ -151,6 +166,7 @@ void init_builtin_string(builtin_type_t* type) {
     type->name = "string";
     type->properties = {{"size", {tid_int, 0}, string_get_size_property}};
     type->methods = {
+        {"empty", 0, 0, string_bool_result_check, string_empty_call},
         {"append", 1, -1, string_are_append_arguments_valid, string_call_append},
         {"lower", 0, 0, string_no_arguments_method, string_call_lower},
         {"upper", 0, 0, string_no_arguments_method, string_call_upper},

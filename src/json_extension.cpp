@@ -43,7 +43,7 @@ int print_json_value(char* buffer, size_t buffer_len, const tml::PrintFormat& in
             return ::tml::snprint(buffer, buffer_len, "{}", initial, "null");
         }
         case JVAL_STRING: {
-            return ::tml::snprint(buffer, buffer_len, "\"{}\"", initial,
+            return ::tml::snprint(buffer, buffer_len, "{}", initial,
                                   string_view{value.data.content.data, value.data.content.size});
         }
         case JVAL_OBJECT: {

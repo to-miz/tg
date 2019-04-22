@@ -178,21 +178,32 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_subs
 
     any_t lhs_ref = evaluate_expression_throws(state, exp->lhs.get());
     auto lhs = lhs_ref.dereference();
-    if (!lhs->is_array()) {
-        throw tg_exeption("Expression is not subscriptable.", exp->lhs->location);
+    const bool is_array = (lhs->type.array_level > 0);
+    const builtin_operator_t* subscript = nullptr;
+    if (!is_array) {
+        auto builtin = state->builtin.get_builtin_type(lhs->type);
+        if (!builtin || (subscript = builtin->get_operator(bop_subscript)) == nullptr) {
+            throw tg_exeption("Expression is not subscriptable.", exp->lhs->location);
+        }
     }
 
-    auto& array = lhs->as_array();
     any_t rhs_ref = evaluate_expression_throws(state, exp->rhs.get());
     auto rhs = rhs_ref.dereference();
-    int subscript_value = 0;
-    if (!rhs->try_convert_to_int(&subscript_value)) {
-        throw tg_exeption("Expression is not implicitly convertible to int for subscription.", exp->rhs->location);
+    if (is_array) {
+        auto& array = lhs->as_array();
+        int subscript_value = 0;
+        bool conversion_success = rhs->try_convert_to_int(&subscript_value);
+        // Conversion must succeed, otherwise infer_expression_types failed.
+        assert_maybe_unused(conversion_success);
+        if (!is_valid_index(array.size(), subscript_value)) {
+            throw tg_exeption("Subscript out of range.", exp->rhs->location);
+        }
+        result = make_any_ref(&array[subscript_value]);
+    } else {
+        assert(subscript);
+        any_t arguments[2] = {make_any_ref(lhs), make_any_ref(rhs)};
+        result = subscript->call(arguments);
     }
-    if (subscript_value < 0 || (size_t)subscript_value >= array.size()) {
-        throw tg_exeption("Subscript out of range.", exp->rhs->location);
-    }
-    result = make_any_ref(&array[subscript_value]);
     return result;
 }
 any_t evaluate_expression_concrete(process_state_t* state, const expression_instanceof_t* exp) {
