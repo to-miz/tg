@@ -176,9 +176,10 @@ any_t read_json_document_call(array_view<any_t> arguments) {
 
 builtin_arguments_valid_result_t json_bool_result_check(const builtin_state_t& /*state*/,
                                                         array_view<const typeid_info_match> arguments) {
-    builtin_arguments_valid_result_t result = {{tid_undefined, 0}, {tid_bool, 0}};
     assert(arguments.size() == 1);
     assert(arguments[0].is(tid_json_value, 0));
+    MAYBE_UNUSED(arguments);
+    builtin_arguments_valid_result_t result = {{tid_undefined, 0}, {tid_bool, 0}};
     return result;
 }
 

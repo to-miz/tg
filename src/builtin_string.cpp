@@ -35,6 +35,7 @@ builtin_arguments_valid_result_t string_bool_result_check(const builtin_state_t&
                                                           array_view<const typeid_info_match> arguments) {
     assert(arguments.size() == 1);
     assert(arguments[0].is(tid_string, 0));
+    MAYBE_UNUSED(arguments);
     builtin_arguments_valid_result_t result = {{tid_string, 0, nullptr}, {tid_bool, 0, nullptr}};
     return result;
 }
