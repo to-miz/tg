@@ -206,20 +206,85 @@ any_t json_value_size_call(array_view<any_t> arguments) {
     return make_any((int)json->value.getArray().count);
 }
 
-any_t json_document_root_call(array_view<any_t> arguments) {
-    assert(arguments.size() == 1);
-    auto lhs = arguments[0].dereference();
-    auto json = static_cast<wrapped_json_document*>(lhs->as_custom());
+// find_object
 
-    auto inner = new wrapped_json_value(json->doc.document.root);
-    return make_any_custom(inner);
+builtin_arguments_valid_result_t json_find_object_check(const builtin_state_t& /*state*/,
+                                                        array_view<const typeid_info_match> arguments) {
+    builtin_arguments_valid_result_t result = {{tid_string, 0}, {tid_json_value, 0}};
+    assert(arguments.size() == 3);
+    assert(arguments[0].is(tid_json_value, 0));
+    if (!arguments[1].is(tid_string, 0)) {
+        result.valid = false;
+        result.expected = {tid_string, 0};
+        result.invalid_index = 1;
+    } else if (!arguments[2].is(tid_int, 0) && !arguments[2].is(tid_bool, 0) && !arguments[2].is(tid_string, 0)) {
+        result.valid = false;
+        // FIXME: Expected should probably be an array of acceptable inputs.
+        // We actually accept a lot of types here, but we can only report one type.
+        result.expected = {tid_int, 0};
+        result.invalid_index = 2;
+    }
+    return result;
 }
 
-void init_builtin_json_document(builtin_type_t* type) {
-    type->name = "json_document";
-    type->properties = {
-        {"root", {tid_json_value, 0}, json_document_root_call},
-    };
+any_t json_find_object_call(array_view<any_t> arguments) {
+    assert(arguments.size() == 3);
+    auto lhs = arguments[0].dereference();
+    assert(lhs->type.is(tid_json_value, 0));
+    auto json = static_cast<wrapped_json_value*>(lhs->as_custom());
+
+    auto inner = new wrapped_json_value{};
+
+    auto array = json->value.getArray();
+    if (!array) return make_any_custom(inner);
+
+    string_view key = arguments[1].dereference()->as_string();
+    auto value_base = arguments[2].dereference();
+
+    switch (value_base->type.id) {
+        case tid_int: {
+            auto value = value_base->as_int();
+            for (auto& entry : array) {
+                auto obj = entry.getObject();
+                auto json_value = obj[key];
+                if (json_value.isIntegral() && json_value.getInt() == value) {
+                    inner->value = entry;
+                    break;
+                }
+            }
+            break;
+        }
+        case tid_bool: {
+            auto value = value_base->as_bool();
+            for (auto& entry : array) {
+                auto obj = entry.getObject();
+                auto json_value = obj[key];
+                if (json_value.isIntegral() && json_value.getBool() == value) {
+                    inner->value = entry;
+                    break;
+                }
+            }
+            break;
+        }
+        case tid_string: {
+            string_view value = value_base->as_string();
+            for (auto& entry : array) {
+                auto obj = entry.getObject();
+                auto json_value = obj[key];
+                if (json_value.isString() && json_value.getString() == value) {
+                    inner->value = entry;
+                    break;
+                }
+            }
+            break;
+        }
+        default: {
+            assert(0);
+            break;
+        }
+    }
+
+    return make_any_custom(inner);
 }
 
 // Operators
@@ -279,8 +344,27 @@ void init_builtin_json_value(builtin_type_t* type) {
         {"is_bool", 0, 0, json_bool_result_check, json_value_is_type_call<JVAL_BOOL>},
         {"is_float", 0, 0, json_bool_result_check, json_value_is_type_call<JVAL_FLOAT>},
         {"exists", 0, 0, json_bool_result_check, json_exists_call},
+        {"find_object", 2, 2, json_find_object_check, json_find_object_call},
     };
     type->is_iteratable = true;
+}
+
+// Document
+
+any_t json_document_root_call(array_view<any_t> arguments) {
+    assert(arguments.size() == 1);
+    auto lhs = arguments[0].dereference();
+    auto json = static_cast<wrapped_json_document*>(lhs->as_custom());
+
+    auto inner = new wrapped_json_value(json->doc.document.root);
+    return make_any_custom(inner);
+}
+
+void init_builtin_json_document(builtin_type_t* type) {
+    type->name = "json_document";
+    type->properties = {
+        {"root", {tid_json_value, 0}, json_document_root_call},
+    };
 }
 
 void init_builtin_json_extension(builtin_state_t* state) {

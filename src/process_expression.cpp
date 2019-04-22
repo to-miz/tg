@@ -397,7 +397,7 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
             auto given = to_string(argument_types[method_args_result.invalid_index]);
             auto msg = print_string("Cannot convert argument number %d from \"%s\" to \"%s\".",
                                     method_args_result.invalid_index, given.data, expected.data);
-            auto location = args[method_args_result.invalid_index]->location;
+            auto location = args[method_args_result.invalid_index - 1]->location;
             print_error_context(msg, {state, location});
             return false;
         }
