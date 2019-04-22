@@ -174,12 +174,13 @@ any_t read_json_document_call(array_view<any_t> arguments) {
     return make_any_custom(inner);
 }
 
-builtin_arguments_valid_result_t json_bool_result_check(const builtin_state_t& /*state*/,
-                                                        array_view<const typeid_info_match> arguments) {
+template <typeid_enum_underlying Result>
+builtin_arguments_valid_result_t json_no_arg_check(const builtin_state_t& /*state*/,
+                                                   array_view<const typeid_info_match> arguments) {
     assert(arguments.size() == 1);
     assert(arguments[0].is(tid_json_value, 0));
     MAYBE_UNUSED(arguments);
-    builtin_arguments_valid_result_t result = {{tid_undefined, 0}, {tid_bool, 0}};
+    builtin_arguments_valid_result_t result = {{tid_undefined, 0}, {Result, 0}};
     return result;
 }
 
@@ -190,7 +191,7 @@ any_t json_exists_call(array_view<any_t> arguments) {
     auto json = static_cast<wrapped_json_value*>(lhs->as_custom());
     return make_any(json->value.type != JVAL_NULL || json->value.data.content.data != nullptr);
 }
-template <int JVAL = JVAL_NULL>
+template <int JVAL>
 any_t json_value_is_type_call(array_view<any_t> arguments) {
     assert(arguments.size() == 1);
     auto lhs = arguments[0].dereference();
@@ -204,6 +205,19 @@ any_t json_value_size_call(array_view<any_t> arguments) {
     auto lhs = arguments[0].dereference();
     auto json = static_cast<wrapped_json_value*>(lhs->as_custom());
     return make_any((int)json->value.getArray().count);
+}
+
+any_t json_value_to_int_call(array_view<any_t> arguments) {
+    assert(arguments.size() == 1);
+    auto lhs = arguments[0].dereference();
+    auto json = static_cast<wrapped_json_value*>(lhs->as_custom());
+    return make_any(json->value.getInt());
+}
+any_t json_value_to_string_call(array_view<any_t> arguments) {
+    assert(arguments.size() == 1);
+    auto lhs = arguments[0].dereference();
+    auto json = static_cast<wrapped_json_value*>(lhs->as_custom());
+    return make_any(json->value.getString());
 }
 
 // find_object
@@ -335,15 +349,17 @@ void init_builtin_json_value(builtin_type_t* type) {
         {"size", {tid_int, 0}, json_value_size_call},
     };
     type->methods = {
-        {"is_null", 0, 0, json_bool_result_check, json_value_is_type_call<JVAL_NULL>},
-        {"is_string", 0, 0, json_bool_result_check, json_value_is_type_call<JVAL_STRING>},
-        {"is_object", 0, 0, json_bool_result_check, json_value_is_type_call<JVAL_OBJECT>},
-        {"is_array", 0, 0, json_bool_result_check, json_value_is_type_call<JVAL_ARRAY>},
-        {"is_int", 0, 0, json_bool_result_check, json_value_is_type_call<JVAL_INT>},
-        {"is_uint", 0, 0, json_bool_result_check, json_value_is_type_call<JVAL_UINT>},
-        {"is_bool", 0, 0, json_bool_result_check, json_value_is_type_call<JVAL_BOOL>},
-        {"is_float", 0, 0, json_bool_result_check, json_value_is_type_call<JVAL_FLOAT>},
-        {"exists", 0, 0, json_bool_result_check, json_exists_call},
+        {"is_null", 0, 0, json_no_arg_check<tid_bool>, json_value_is_type_call<JVAL_NULL>},
+        {"is_string", 0, 0, json_no_arg_check<tid_bool>, json_value_is_type_call<JVAL_STRING>},
+        {"is_object", 0, 0, json_no_arg_check<tid_bool>, json_value_is_type_call<JVAL_OBJECT>},
+        {"is_array", 0, 0, json_no_arg_check<tid_bool>, json_value_is_type_call<JVAL_ARRAY>},
+        {"is_int", 0, 0, json_no_arg_check<tid_bool>, json_value_is_type_call<JVAL_INT>},
+        {"is_uint", 0, 0, json_no_arg_check<tid_bool>, json_value_is_type_call<JVAL_UINT>},
+        {"is_bool", 0, 0, json_no_arg_check<tid_bool>, json_value_is_type_call<JVAL_BOOL>},
+        {"is_float", 0, 0, json_no_arg_check<tid_bool>, json_value_is_type_call<JVAL_FLOAT>},
+        {"to_int", 0, 0, json_no_arg_check<tid_int>, json_value_to_int_call},
+        {"to_string", 0, 0, json_no_arg_check<tid_string>, json_value_to_string_call},
+        {"exists", 0, 0, json_no_arg_check<tid_bool>, json_exists_call},
         {"find_object", 2, 2, json_find_object_check, json_find_object_call},
     };
     type->is_iteratable = true;
