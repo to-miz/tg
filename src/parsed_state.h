@@ -96,6 +96,7 @@ struct parsed_state_t {
     }
 };
 
+
 struct parsing_state_t {
     parsed_state_t* data = nullptr;
     int current_symbol_table = 0;

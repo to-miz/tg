@@ -53,6 +53,7 @@ enum statement_type_enum {
     stmt_declaration,
     stmt_break,
     stmt_continue,
+    stmt_return,
 };
 struct statement_t {
     statement_type_enum type = stmt_none;
@@ -80,43 +81,42 @@ struct statement_t {
             } else {
                 spaces = other.spaces;
                 switch (type) {
+                    case stmt_return:
                     case stmt_none: {
-                        break;
+                        none = 0;
+                        return *this;
                     }
                     case stmt_literal: {
                         literal = move(other.literal);
-                        break;
+                        return *this;
                     }
                     case stmt_if: {
                         if_statement = move(other.if_statement);
-                        break;
+                        return *this;
                     }
                     case stmt_for: {
                         for_statement = move(other.for_statement);
-                        break;
+                        return *this;
                     }
                     case stmt_expression: {
                         formatted = move(other.formatted);
-                        break;
+                        return *this;
                     }
                     case stmt_comma: {
                         comma = other.comma;
-                        break;
+                        return *this;
                     }
                     case stmt_declaration: {
                         declaration = move(other.declaration);
-                        break;
+                        return *this;
                     }
                     case stmt_break:
                     case stmt_continue: {
                         break_continue_statement = other.break_continue_statement;
-                        break;
-                    }
-                    default: {
-                        assert(0);
-                        break;
+                        return *this;
                     }
                 }
+                assert(0);
             }
         }
         return *this;
@@ -133,83 +133,84 @@ struct statement_t {
     void make(statement_type_enum new_type) {
         this->type = new_type;
         switch (new_type) {
+            case stmt_return:
             case stmt_none: {
-                break;
+                none = 0;
+                return;
             }
             case stmt_literal: {
                 new (&literal) string();
-                break;
+                return;
             }
             case stmt_if: {
                 new (&if_statement) if_t();
-                break;
+                return;
             }
             case stmt_for: {
                 new (&for_statement) for_t();
-                break;
+                return;
             }
             case stmt_expression: {
                 new (&formatted) formatted_expression_t();
-                break;
+                return;
             }
             case stmt_comma: {
                 comma = {};
-                break;
+                return;
             }
             case stmt_declaration: {
                 new (&declaration) stmt_declaration_t();
-                break;
+                return;
             }
             case stmt_break:
             case stmt_continue: {
                 break_continue_statement = {};
-                break;
-            }
-            default: {
-                assert(0);
-                break;
+                return;
             }
         }
+        assert(0);
     }
     void destroy() {
-        switch (type) {
-            case stmt_none: {
-                break;
+        auto destroy_impl = [](statement_t* stmt) {
+            switch (stmt->type) {
+                case stmt_return:
+                case stmt_none: {
+                    return;
+                }
+                case stmt_literal: {
+                    stmt->literal.~string();
+                    return;
+                }
+                case stmt_if: {
+                    stmt->if_statement.~if_t();
+                    return;
+                }
+                case stmt_for: {
+                    stmt->for_statement.~for_t();
+                    return;
+                }
+                case stmt_expression: {
+                    stmt->formatted.~formatted_expression_t();
+                    return;
+                }
+                case stmt_comma: {
+                    stmt->comma = {};
+                    return;
+                }
+                case stmt_declaration: {
+                    stmt->declaration.~stmt_declaration_t();
+                    return;
+                }
+                case stmt_break:
+                case stmt_continue: {
+                    stmt->break_continue_statement = {};
+                    return;
+                }
             }
-            case stmt_literal: {
-                literal.~string();
-                break;
-            }
-            case stmt_if: {
-                if_statement.~if_t();
-                break;
-            }
-            case stmt_for: {
-                for_statement.~for_t();
-                break;
-            }
-            case stmt_expression: {
-                formatted.~formatted_expression_t();
-                break;
-            }
-            case stmt_comma: {
-                comma = {};
-                break;
-            }
-            case stmt_declaration: {
-                declaration.~stmt_declaration_t();
-                break;
-            }
-            case stmt_break:
-            case stmt_continue: {
-                break_continue_statement = {};
-                break;
-            }
-            default: {
-                assert(0);
-                break;
-            }
-        }
+            assert(0);
+        };
+
+        destroy_impl(this);
         type = stmt_none;
         // Explicitly set none so that union type is changed.
         none = 0;
@@ -218,43 +219,42 @@ struct statement_t {
         type = other.type;
         spaces = other.spaces;
         switch (other.type) {
+            case stmt_return:
             case stmt_none: {
-                break;
+                none = 0;
+                return;
             }
             case stmt_literal: {
                 new (&literal) string(move(other.literal));
-                break;
+                return;
             }
             case stmt_if: {
                 new (&if_statement) if_t(move(other.if_statement));
-                break;
+                return;
             }
             case stmt_for: {
                 new (&for_statement) for_t(move(other.for_statement));
-                break;
+                return;
             }
             case stmt_expression: {
                 new (&formatted) formatted_expression_t(move(other.formatted));
-                break;
+                return;
             }
             case stmt_comma: {
                 comma = other.comma;
-                break;
+                return;
             }
             case stmt_declaration: {
                 new (&declaration) stmt_declaration_t(move(other.declaration));
-                break;
+                return;
             }
             case stmt_break:
             case stmt_continue: {
                 break_continue_statement = other.break_continue_statement;
-                break;
-            }
-            default: {
-                assert(0);
-                break;
+                return;
             }
         }
+        assert(0);
     }
 };
 

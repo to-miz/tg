@@ -755,7 +755,7 @@ bool infer_expression_types_segment(process_state_t* state, formatted_segment_t*
                     if (!infer_expression_types_block(state, &if_stmt->else_block)) return false;
                 }
                 state->set_scope(prev_scope);
-                break;
+                continue;
             }
             case stmt_for: {
                 auto for_stmt = &statement.for_statement;
@@ -784,29 +784,30 @@ bool infer_expression_types_segment(process_state_t* state, formatted_segment_t*
                 symbol->declaration_inferred = true;
                 if (!infer_expression_types_block(state, &for_stmt->body)) return false;
                 state->set_scope(prev_scope);
-                break;
+                continue;
             }
             case stmt_expression: {
                 if (!infer_expression_types_expression(state, statement.formatted.expression.get())) return false;
-                break;
+                continue;
             }
             case stmt_declaration: {
                 auto declaration = &statement.declaration;
                 if (!infer_declaration_types(state, declaration)) return false;
-                break;
+                continue;
             }
-            case stmt_none:
             case stmt_literal:
             case stmt_comma:
             case stmt_break:
-            case stmt_continue: {
+            case stmt_continue:
+            case stmt_return: {
+                continue;
+            }
+            case stmt_none: {
                 break;
             }
-            default: {
-                assert(0 && "Unhandled statement type.");
-                return false;
-            }
         }
+        assert(0 && "Unhandled statement type.");
+        return false;
     }
     return true;
 }

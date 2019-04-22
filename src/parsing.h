@@ -1,6 +1,6 @@
 bool is_keyword(string_view str) {
-    static const string_view keywords[] = {"generator", "range", "int",      "bool", "string",
-                                           "pattern",   "sum",   "continue", "break"};
+    static const string_view keywords[] = {"generator", "range", "int",      "bool",  "string",
+                                           "pattern",   "sum",   "continue", "break", "return"};
 
     return find(begin(keywords), end(keywords), str) != end(keywords);
 }
@@ -545,6 +545,16 @@ parse_result parse_single_statement_impl(tokenizer_t* tokenizer, parsing_state_t
                     }
                     statement->set_type((is_break) ? stmt_break : stmt_continue);
                     statement->break_continue_statement = {count};
+                    if (can_semicolon_follow) *can_semicolon_follow = true;
+                    return pr_success;
+                }
+                break;
+            }
+            case 'r': {
+                if (token.contents == "return") {
+                    next_token(tokenizer);  // Consume return token.
+
+                    statement->set_type(stmt_return);
                     if (can_semicolon_follow) *can_semicolon_follow = true;
                     return pr_success;
                 }

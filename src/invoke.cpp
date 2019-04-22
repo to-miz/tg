@@ -83,7 +83,7 @@ void output_expression(process_state_t* state, const expression_t* exp, int prec
 }
 
 struct eval_result {
-    enum { resume_result, break_result, continue_result } type;
+    enum { resume_result, break_result, continue_result, return_result } type;
     int level;
 };
 
@@ -97,6 +97,10 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
 
     for (const auto& statement : segment.statements) {
         bool is_break = statement.type == stmt_break;
+        if (statement.type == stmt_return) {
+            result.type = eval_result::return_result;
+            break;
+        }
         if (is_break || statement.type == stmt_continue) {
             auto level = statement.break_continue_statement.level;
             result = {(is_break) ? eval_result::break_result : eval_result::continue_result, level};
@@ -110,7 +114,7 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
                 if (!literal.empty()) {
                     output_string(out, literal, statement.spaces);
                 }
-                break;
+                continue;
             }
             case stmt_if: {
                 const auto& if_statement = statement.if_statement;
@@ -136,7 +140,7 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
                     evaluate_literal_body(state, if_statement.else_block);
                 }
                 state->set_scope(prev_scope);
-                break;
+                continue;
             }
             case stmt_for: {
                 const auto& for_statement = statement.for_statement;
@@ -161,6 +165,7 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
                         stack.back().values[symbol->stack_value_index] = make_any_ref(&array[i]);
                         auto nested_result = evaluate_literal_body(state, body);
                         if (nested_result.type != eval_result::resume_result) {
+                            if (nested_result.type == eval_result::return_result) goto end;
                             // If level is > 0 we have to break no matter what,
                             // since a statement like 'continue 1;' is a break and a continue.
                             if (nested_result.level > 0) {
@@ -182,6 +187,7 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
                         i = index_value.convert_to_int();  // Get back value from script.
 
                         if (nested_result.type != eval_result::resume_result) {
+                            if (nested_result.type == eval_result::return_result) goto end;
                             // If level is > 0 we have to break no matter what,
                             // since a statement like 'continue 1;' is a break and a continue.
                             if (nested_result.level > 0) {
@@ -203,6 +209,7 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
                         stack.back().values[symbol->stack_value_index] = make_any_ref(&current);
                         auto nested_result = evaluate_literal_body(state, body);
                         if (nested_result.type != eval_result::resume_result) {
+                            if (nested_result.type == eval_result::return_result) goto end;
                             // If level is > 0 we have to break no matter what,
                             // since a statement like 'continue 1;' is a break and a continue.
                             if (nested_result.level > 0) {
@@ -219,12 +226,12 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
 
                 out->nested_for_statements.pop_back();
                 state->set_scope(prev_scope);
-                break;
+                continue;
             }
             case stmt_expression: {
                 output_expression(state, statement.formatted.expression.get(), statement.spaces,
                                   statement.formatted.format);
-                break;
+                continue;
             }
             case stmt_comma: {
                 auto comma = statement.comma;
@@ -241,7 +248,7 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
                 if (not_last) {
                     output_string(out, (comma.space_after) ? ", " : ",", statement.spaces);
                 }
-                break;
+                continue;
             }
             case stmt_declaration: {
                 auto declaration = &statement.declaration;
@@ -254,15 +261,20 @@ eval_result evaluate_segment(process_state_t* state, const formatted_segment_t& 
                 } else {
                     stack_entry.set_type(declaration->type);
                 }
-                break;
+                continue;
             }
-            default: {
-                assert(0);
+            case stmt_return:
+            case stmt_none:
+            case stmt_break:
+            case stmt_continue: {
                 break;
             }
         }
+
+        assert(0 && "Unhandled switch case.");
     }
 
+end:
     out->pop_line(ws.indentation, ws.spaces);
     return result;
 }
