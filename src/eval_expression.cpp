@@ -251,23 +251,25 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_dot_
                     // There can't be an instance of a sum type, it is always a concrete matched pattern.
                     assert(0 && "Internal error.");
                 }
-                break;
+                continue;
             }
             case inferred_field_t::ft_property: {
                 assert(concrete.property);
                 value_ref = concrete.property->call({value, 1});
-                break;
+                continue;
             }
             case inferred_field_t::ft_method: {
-                // This should not happen.
-                assert(0 && "Internal error.");
-                break;
+                // This only happens if a method is specified without calling it like "str.upper".
+                // Otherwise, this would be a call expression.
+                value_ref = make_any_void();
+                continue;
             }
-            default: {
-                assert(0 && "Internal error.");
+            case inferred_field_t::ft_none: {
                 break;
             }
         }
+        assert(0 && "Internal error.");
+        break;
     }
 
     return value_ref;
