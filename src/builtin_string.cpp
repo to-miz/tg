@@ -227,6 +227,8 @@ bool case_next_word(tmsu_tokenizer* tokenizer, string_view* out) {
     return true;
 }
 
+// FIXME: We should get the first grapheme instead of the first codepoint.
+// See everywhere that next_codepoint_length is used.
 size_t next_codepoint_length(string_view str) {
     auto stream = tmu_utf8_make_stream_n(str.data(), str.size());
     auto start = stream.cur;
@@ -248,7 +250,6 @@ any_t string_camel_case_call(array_view<any_t> arguments) {
         auto word = to_lower(word_view);
         if (not_first) {
             // Turn first letter to uppercase.
-            // FIXME: We should get the first grapheme and turn it uppercase to be absolutely correct here.
             auto len = next_codepoint_length(word);
             // Replace first letter with uppercase version.
             auto upper = to_upper({word.data(), word.data() + len});
@@ -272,7 +273,6 @@ any_t string_pascal_case_call(array_view<any_t> arguments) {
         auto word = to_lower(word_view);
 
         // Turn first letter to uppercase.
-        // FIXME: We should get the first grapheme and turn it uppercase to be absolutely correct here.
         auto len = next_codepoint_length(word);
         // Replace first letter with uppercase version.
         auto upper = to_upper({word.data(), word.data() + len});

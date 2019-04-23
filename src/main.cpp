@@ -1,3 +1,13 @@
+/*
+TODO:
+    - Implement a builtin abort/exit/fail function that displays an error message.
+    - Pattern matching should not be compile time only, there should be a try_match function or similar.
+    - Implement comments.
+FIXME:
+    - An expression like range(1, -) results in assertion failure in monotonic_allocator.h.
+    - eval_expression errors do not result in returing -1 from main.
+*/
+
 /* crt */
 #include <cassert>
 #include <cstddef>
@@ -16,13 +26,6 @@ using std::begin;
 using std::end;
 using std::move;
 using std::size_t;
-/*
-TODO:
-    - Implement a builtin abort/exit/fail function that displays an error message.
-    - Pattern matching should not be compile time only, there should be a try_match function or similar.
-FIXME:
-    - eval_expression errors do not result in returing -1 from main.
-*/
 
 using std::string;
 using std::unique_ptr;

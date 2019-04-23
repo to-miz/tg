@@ -1,3 +1,4 @@
+// FIXME: Field "expected" should be an array so we can report all acceptable inputs.
 struct builtin_arguments_valid_result_t {
     bool valid = true;
     int invalid_index = 0;               // On error: Holds the index of the invalid argument.
