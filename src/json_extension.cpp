@@ -213,6 +213,12 @@ any_t json_value_to_int_call(array_view<any_t> arguments) {
     auto json = static_cast<wrapped_json_value*>(lhs->as_custom());
     return make_any(json->value.getInt());
 }
+any_t json_value_to_bool_call(array_view<any_t> arguments) {
+    assert(arguments.size() == 1);
+    auto lhs = arguments[0].dereference();
+    auto json = static_cast<wrapped_json_value*>(lhs->as_custom());
+    return make_any(json->value.getBool());
+}
 any_t json_value_to_string_call(array_view<any_t> arguments) {
     assert(arguments.size() == 1);
     auto lhs = arguments[0].dereference();
@@ -358,6 +364,7 @@ void init_builtin_json_value(builtin_type_t* type) {
         {"is_bool", 0, 0, json_no_arg_check<tid_bool>, json_value_is_type_call<JVAL_BOOL>},
         {"is_float", 0, 0, json_no_arg_check<tid_bool>, json_value_is_type_call<JVAL_FLOAT>},
         {"to_int", 0, 0, json_no_arg_check<tid_int>, json_value_to_int_call},
+        {"to_bool", 0, 0, json_no_arg_check<tid_bool>, json_value_to_bool_call},
         {"to_string", 0, 0, json_no_arg_check<tid_string>, json_value_to_string_call},
         {"exists", 0, 0, json_no_arg_check<tid_bool>, json_exists_call},
         {"find_object", 2, 2, json_find_object_check, json_find_object_call},
