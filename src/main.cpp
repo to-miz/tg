@@ -3,6 +3,8 @@ TODO:
     - Implement a builtin abort/exit/fail function that displays an error message.
     - Pattern matching should not be compile time only, there should be a try_match function or similar.
     - Implement comments.
+    - Implement string printing in the scripting language.
+    - Implement string escaping/quoting.
 FIXME:
     - An expression like range(1, -) results in assertion failure in monotonic_allocator.h.
     - eval_expression errors do not result in returing -1 from main.
