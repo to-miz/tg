@@ -86,6 +86,41 @@ string to_upper(string_view str) {
     return result;
 }
 
+string to_title_all(string_view str) {
+    auto result = std::string(str.size(), 0);
+    auto conversion = tmu_utf8_to_title(str.data(), str.size(), result.data(), result.size());
+    if (conversion.ec == TM_ERANGE) {
+        result.resize(conversion.size);
+        conversion = tmu_utf8_to_title(str.data(), str.size(), result.data(), result.size());
+    }
+    assert(conversion.ec == TM_OK);
+    return result;
+}
+
+// FIXME: We should get the first grapheme instead of the first codepoint.
+// See everywhere that next_codepoint_length is used.
+size_t next_codepoint_length(string_view str) {
+    auto stream = tmu_utf8_make_stream_n(str.data(), str.size());
+    auto start = stream.cur;
+    uint32_t codepoint = 0;
+    if (tmu_utf8_extract(&stream, &codepoint)) return (size_t)(stream.cur - start);
+    return 0;
+}
+
+void to_title_first_inplace(string& result) {
+    auto len = next_codepoint_length(result);
+    // Replace first letter with titlecase version.
+    auto title = to_title_all({result.data(), result.data() + len});
+    result.erase(result.begin(), result.begin() + len);
+    result.insert(result.begin(), title.begin(), title.end());
+}
+
+string to_title(string_view str) {
+    string result = {str.begin(), str.end()};
+    to_title_first_inplace(result);
+    return result;
+}
+
 any_t string_call_lower(array_view<any_t> arguments) {
     assert(arguments.size() == 1);
     auto lhs = arguments[0].dereference();
@@ -96,6 +131,12 @@ any_t string_call_upper(array_view<any_t> arguments) {
     assert(arguments.size() == 1);
     auto lhs = arguments[0].dereference();
     return make_any(to_upper(lhs->as_string()));
+}
+
+any_t string_call_title(array_view<any_t> arguments) {
+    assert(arguments.size() == 1);
+    auto lhs = arguments[0].dereference();
+    return make_any(to_title(lhs->as_string()));
 }
 
 any_t string_call_trim(array_view<any_t> arguments) {
@@ -227,16 +268,6 @@ bool case_next_word(tmsu_tokenizer* tokenizer, string_view* out) {
     return true;
 }
 
-// FIXME: We should get the first grapheme instead of the first codepoint.
-// See everywhere that next_codepoint_length is used.
-size_t next_codepoint_length(string_view str) {
-    auto stream = tmu_utf8_make_stream_n(str.data(), str.size());
-    auto start = stream.cur;
-    uint32_t codepoint = 0;
-    if (tmu_utf8_extract(&stream, &codepoint)) return (size_t)(stream.cur - start);
-    return 0;
-}
-
 any_t string_camel_case_call(array_view<any_t> arguments) {
     assert(arguments.size() == 1);
     auto lhs = arguments[0].dereference();
@@ -248,14 +279,7 @@ any_t string_camel_case_call(array_view<any_t> arguments) {
     bool not_first = false;
     while (case_next_word(&tokenizer, &word_view)) {
         auto word = to_lower(word_view);
-        if (not_first) {
-            // Turn first letter to uppercase.
-            auto len = next_codepoint_length(word);
-            // Replace first letter with uppercase version.
-            auto upper = to_upper({word.data(), word.data() + len});
-            word.erase(word.begin(), word.begin() + len);
-            word.insert(word.begin(), upper.begin(), upper.end());
-        }
+        if (not_first) to_title_first_inplace(word);
         not_first = true;
         result.insert(result.end(), word.begin(), word.end());
     }
@@ -271,14 +295,7 @@ any_t string_pascal_case_call(array_view<any_t> arguments) {
     string_view word_view = {};
     while (case_next_word(&tokenizer, &word_view)) {
         auto word = to_lower(word_view);
-
-        // Turn first letter to uppercase.
-        auto len = next_codepoint_length(word);
-        // Replace first letter with uppercase version.
-        auto upper = to_upper({word.data(), word.data() + len});
-        word.erase(word.begin(), word.begin() + len);
-        word.insert(word.begin(), upper.begin(), upper.end());
-
+        to_title_first_inplace(word);
         result.insert(result.end(), word.begin(), word.end());
     }
     return make_any(result);
@@ -343,6 +360,7 @@ void init_builtin_string(builtin_type_t* type) {
         {"append", 1, -1, string_are_append_arguments_valid, string_call_append},
         {"lower", 0, 0, string_no_arguments_method, string_call_lower},
         {"upper", 0, 0, string_no_arguments_method, string_call_upper},
+        {"title", 0, 0, string_no_arguments_method, string_call_title},
         {"trim", 0, 0, string_no_arguments_method, string_call_trim},
         {"trim_left", 0, 0, string_no_arguments_method, string_call_trim_left},
         {"trim_right", 0, 0, string_no_arguments_method, string_call_trim_right},
