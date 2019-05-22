@@ -723,16 +723,31 @@ void add_literal_statement(formatted_segment_t* segment, const char* first, cons
             auto count = (size_t)(new_end - first);
             literal.resize(count + has_newline);
             size_t used_size = 0;
+            bool skip_next_gt = false;
             for (size_t i = 0; i < count; ++i) {
                 auto c = first[i];
                 // Skip outputting \r since newlines are handled by the indented_line preceding newlines member.
                 if (c == '\r') continue;
-                literal[used_size++] = c;
+                if (c == '>' && skip_next_gt) {
+                    skip_next_gt = false;
+                    continue;
+                }
                 if (c == '$') {
                     assert(i + 1 < count);
-                    assert(first[i + 1] == '$');
-                    ++i;  // Skip next '$' sign.
+                    auto next = first[i + 1];
+                    if (next == '<') {
+                        ++i;                  // Skip next '<'.
+                        skip_next_gt = true;  // Skip next '>'.
+                        continue;
+                    }
+
+                    if (next == '$') {
+                        ++i;  // Skip next '$'.
+                    } else {
+                        assert(0 && "Internal error.");
+                    }
                 }
+                literal[used_size++] = c;
             }
             if (has_newline) literal[used_size++] = '\n';
             literal.resize(used_size);
@@ -812,6 +827,17 @@ parse_result parse_literal_block(tokenizer_t* tokenizer, parsing_state_t* parsin
             advance_column(tokenizer, next + 2);
             continue;
         }
+        // Allow for escape sequences in the form of $<escaped_content>.
+        if (*(next + 1) == '<') {
+            advance_column(tokenizer, next + 2);
+            next = tmsu_find_char(tokenizer->current, '>');
+            if (!*next) {
+                print_error_context("End of file reached before encountering '>'.", tokenizer, curly_start);
+                return pr_error;
+            }
+            advance(tokenizer, next + 1);
+            continue;
+        }
 
         // Count spaces before next statement except for the first statement, since it is handled automatically by the
         // indentation of the containing segment.
@@ -851,6 +877,11 @@ parse_result parse_literal_block(tokenizer_t* tokenizer, parsing_state_t* parsin
         }
 
         start = tokenizer->current;
+    }
+
+    // Check if there is remaining content that needs to be output.
+    if (tmsu_find_first_not_of_n(start, tokenizer->current, WHITESPACE) != tokenizer->current) {
+        add_literal_statement(current_segment, start, tokenizer->current, new_skip, true);
     }
 
     if (!require_token_type(tokenizer, next_token(tokenizer), tok_curly_close, "'}' expected.")) return pr_error;
