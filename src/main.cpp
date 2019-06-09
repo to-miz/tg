@@ -8,9 +8,6 @@ TODO:
     - Implement multiple output files (header/implementation).
         - Add file io functions, for instance for generating boilerplate code if a file doesn't exist.
     - Implement direct clang-format integration through a command line option.
-    - Implement multiple output files (header/implementation).
-        - Add file io functions, for instance for generating boilerplate code if a file doesn't exist.
-    - Implement direct clang-format integration through a command line option.
     - Implement tuples/structs.
 FIXME:
     - An expression like range(1, -) results in assertion failure in monotonic_allocator.h.
