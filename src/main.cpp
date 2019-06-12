@@ -90,6 +90,14 @@ using std::min;
 #endif
 // clang-format on
 
+#if 0
+#ifdef assert
+#undef assert
+#endif
+
+#define assert(cond) break_if(!(cond))
+#endif
+
 inline bool is_valid_index(size_t size, int index) { return index >= 0 && (size_t)index < size; }
 
 bool operator==(string_view a, string_view b) { return tmsu_equals_n(a.begin(), a.end(), b.begin(), b.end()); }

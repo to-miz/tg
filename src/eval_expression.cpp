@@ -10,8 +10,7 @@ struct tg_exeption {
 };
 
 any_t evaluate_expression_throws(process_state_t* state, const expression_t* exp);
-void evaluate_call(process_state_t* state, const generator_t& generator, const vector<any_t>& args,
-                   const vector<stream_loc_ex_t>& arg_locations);
+void evaluate_call(process_state_t* state, const generator_t& generator, const vector<unique_expression_t>& arguments);
 
 bool check_array_of_matches(const any_t* value, typeid_info_match to) {
     assert(value->type.array_level == to.array_level);
@@ -146,9 +145,12 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_call
 
     vector<any_t> arguments;
     vector<stream_loc_ex_t> argument_locations;
-    for (const auto& arg : exp->arguments) {
-        arguments.emplace_back(evaluate_expression_throws(state, arg.get()));
-        argument_locations.emplace_back(arg->location);
+    if (lhs->type.id != tid_generator) {
+        // Generator will evaluate its own arguments.
+        for (const auto& arg : exp->arguments) {
+            arguments.emplace_back(evaluate_expression_throws(state, arg.get()));
+            argument_locations.emplace_back(arg->location);
+        }
     }
     if (exp->method) {
         // Add this pointer to arguments.
@@ -163,7 +165,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_call
         }
         case tid_generator: {
             auto generator = lhs->as_generator();
-            evaluate_call(state, *generator, arguments, argument_locations);
+            evaluate_call(state, *generator, exp->arguments);
             return make_any_void();
         }
         default: {
@@ -553,6 +555,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_assi
     } else if (lhs->type.is(tid_bool, 0)) {
         *lhs = make_any(rhs->convert_to_bool());
     } else {
+        break_if(!(lhs->type == rhs->type));
         assert(lhs->type == rhs->type);
         *lhs = *rhs;
     }

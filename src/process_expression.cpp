@@ -236,19 +236,75 @@ bool infer_expression_types_concrete_generator(process_state_t* state, expressio
     auto generator = generator_symbol->generator;
 
     int arguments_count = (int)args->size();
-    if (arguments_count < generator->required_parameters) {
-        auto msg = print_string("Not enough parameters to generator \"%.*s\".", PRINT_SW(generator->name.contents));
-        print_error_context(msg, {state, exp->location});
-        return false;
-    }
+    // We set the scope of the generator here, so identifiers referencing named generator parameters can be found.
+    auto old_scope = state->set_scope(generator->scope_index);
 
+    bool started_named_params = false;
+    const int required_params_count = generator->required_parameters;
+    int supplied_required_params_count = 0;
+
+    vector<int> supplied_params;
     for (int i = 0; i < arguments_count; ++i) {
-        auto* arg = args->at(i).get();
-        // Arguments should already be inferred by caller.
+        auto* unique_arg = &args->at(i);
+        auto* arg = unique_arg->get();
+        if (!infer_expression_types_expression(state, arg)) return false;
         assert(arg->result_type.id != tid_undefined);
 
-        const auto* param = &generator->parameters[i];
-        const auto* symbol = state->find_symbol_flat(param->variable.contents, generator->scope_index);
+        const symbol_entry_t* symbol = nullptr;
+
+        if (arg->type == exp_assign) {
+            // Check if assignment is as named parameter assignment.
+            bool is_named_param = false;
+
+            auto assign = static_cast<expression_assign_t*>(arg);
+            auto arg_lhs = assign->lhs.get();
+            if (arg_lhs->type == exp_identifier) {
+                auto arg_identifier = static_cast<expression_identifier_t*>(arg_lhs);
+                int param_index = generator->find_parameter_index(arg_identifier->identifier);
+                if (param_index >= 0) {
+                    if (find(supplied_params.begin(), supplied_params.end(), param_index) != supplied_params.end()) {
+                        // We already added this argument.
+                        auto msg = print_string("Parameter \"%.*s\" specified more than once.",
+                                                PRINT_SW(arg_identifier->identifier));
+                        print_error_context(msg, {state, arg_identifier->location});
+                        return false;
+                    }
+                    const auto* param = &generator->parameters[param_index];
+                    // Make absolutely sure that parameter points to the same symbol as the symbol that the identifier
+                    // was inferred to.
+                    symbol = state->find_symbol_flat(param->variable.contents, generator->scope_index);
+                    if (symbol == arg_identifier->symbol) {
+                        // We found a named param
+                        is_named_param = true;
+                        started_named_params = true;
+                        // Actual parameter is right hand side of named parameter assignment.
+                        // We don't need to alter the expression type to make sure that the evaluation of the expression
+                        // actually changes the paremeter, because the expression is an assignment expression.
+                        // When evaluated, it will assign a value to the parameter by itself.
+                        unique_arg = &assign->rhs;
+                        arg = unique_arg->get();
+                        if (param_index < required_params_count) ++supplied_required_params_count;
+                        supplied_params.push_back(param_index);
+                    }
+                }
+            }
+
+            if (!is_named_param) {
+                // Error reporting.
+                print_error_context("Invalid assignment expression in argument list.", {state, arg->location});
+                return false;
+            }
+        } else {
+            if (started_named_params) {
+                // Regular parameters cannot follow after named parameters.
+                print_error_context("Invalid regular parameter after named parameter.", {state, arg->location});
+                return false;
+            }
+            const auto* param = &generator->parameters[i];
+            symbol = state->find_symbol_flat(param->variable.contents, generator->scope_index);
+            if (i < required_params_count) ++supplied_required_params_count;
+            supplied_params.push_back(i);
+        }
         assert(symbol);
         any_t compile_time_value;
         if (!is_expression_convertible_to(state, arg, symbol->type, symbol->definition, &compile_time_value)) {
@@ -261,9 +317,17 @@ bool infer_expression_types_concrete_generator(process_state_t* state, expressio
             compile_time_exp->value = move(compile_time_value);
             compile_time_exp->definition = symbol->definition;
             compile_time_exp->value_category = exp_value_constant;
-            args->at(i) = move(compile_time_exp);
+            *unique_arg = move(compile_time_exp);
         }
     }
+
+    if (supplied_required_params_count < required_params_count) {
+        auto msg = print_string("Not enough parameters to generator \"%.*s\".", PRINT_SW(generator->name.contents));
+        print_error_context(msg, {state, exp->location});
+        return false;
+    }
+
+    state->set_scope(old_scope);
 
     return true;
 }
@@ -321,12 +385,15 @@ bool infer_expression_types_builtin_function(process_state_t* state, expression_
 }
 
 bool infer_expression_types_concrete_expression(process_state_t* state, expression_call_t* exp) {
-    if (!infer_expression_types_expression(state, exp->lhs.get())) return false;
-    for (auto&& arg : exp->arguments) {
-        if (!infer_expression_types_expression(state, arg.get())) return false;
+    auto lhs = exp->lhs.get();
+    if (!infer_expression_types_expression(state, lhs)) return false;
+    // infer_expression_types_concrete_generator will do inferring of the arguments itself.
+    if (!lhs->result_type.is(tid_generator, 0)) {
+        for (auto&& arg : exp->arguments) {
+            if (!infer_expression_types_expression(state, arg.get())) return false;
+        }
     }
 
-    auto lhs = exp->lhs.get();
     if (!lhs->result_type.is_callable()) {
         print_error_context("Expression does not result in a callable type.", {state, exp->location});
         return false;

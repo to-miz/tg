@@ -36,9 +36,9 @@ enum expression_type_enum : int8_t {
 
     exp_assign,
 
-    // This expression type will only be generated when inferring types, not while parsing expressions.
-    // Therefore there is no parse_compile_time_evaluated_expression function.
-    // This expression replaces an expression with its evaluated compile time value.
+    // These expression types will only be generated when inferring types, not while parsing expressions.
+    // Therefore there is no parse_compile_time_evaluated_expression etc function.
+    // These expressions replace an expression their inferred versions.
     exp_compile_time_evaluated,
 };
 

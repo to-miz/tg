@@ -290,13 +290,12 @@ eval_result evaluate_literal_body(process_state_t* state, const literal_block_t&
     return result;
 }
 
-void evaluate_call(process_state_t* state, const generator_t& generator, const vector<any_t>& args,
-                   const vector<stream_loc_ex_t>& arg_locations) {
+void evaluate_call(process_state_t* state, const generator_t& generator, const vector<unique_expression_t>& arguments) {
     assert(state);
     assert(state->output.stream);
     assert(generator.required_parameters >= 0);
-    assert(args.size() >= (size_t)generator.required_parameters);
-    assert(args.size() <= (size_t)generator.parameters.size());
+    assert(arguments.size() >= (size_t)generator.required_parameters);
+    assert(arguments.size() <= (size_t)generator.parameters.size());
     assert(generator.parameters.size() >= (size_t)generator.required_parameters);
 
     auto scope_index = generator.scope_index;
@@ -307,9 +306,30 @@ void evaluate_call(process_state_t* state, const generator_t& generator, const v
     assert(generator.stack_size >= 0);
     if (generator.stack_size > 0) current_stack.values.resize(generator.stack_size);
 
-    auto required_parameters = max(generator.required_parameters, (int)args.size());
+    // Set stack values for parameters to their actual type, so that named parameter evaluation doesn't produce errors.
+    // Also initialize parameters with their default values if they have one.
     int count = (int)generator.parameters.size();
+    auto required_parameters = generator.required_parameters;
     assert(required_parameters <= count);
+    for (int i = 0; i < count; ++i) {
+        auto& param = generator.parameters[i];
+        auto type = param.type;
+        if (type.id == tid_sum) {
+            // There are no concrete sum instances (sums are abstract types), only matched actual patterns.
+            type.id = tid_pattern;
+        }
+        current_stack.values[i].set_type(type);
+        if (i >= required_parameters) {
+            assert(param.expression->type == exp_compile_time_evaluated);
+            auto compile_time_expr = static_cast<const expression_compile_time_evaluated_t*>(param.expression.get());
+            current_stack.values[i] = compile_time_expr->value;
+        }
+    }
+
+    vector<any_t> evaluated;
+    for (const auto& arg : arguments) {
+        evaluated.emplace_back(evaluate_expression_throws(state, arg.get()));
+    }
 
     for (int i = 0; i < count; ++i) {
         auto& param = generator.parameters[i];
@@ -318,12 +338,21 @@ void evaluate_call(process_state_t* state, const generator_t& generator, const v
         assert(symbol->stack_value_index == i);
 
         if (i < required_parameters) {
-            current_stack.values[i] = convert_value_to_type(state, args[i].dereference(), arg_locations[i],
-                                                            {symbol->type, symbol->definition});
-        } else {
-            assert(param.expression->type == exp_compile_time_evaluated);
-            auto compile_time_expr = static_cast<const expression_compile_time_evaluated_t*>(param.expression.get());
-            current_stack.values[i] = compile_time_expr->value;
+            // Named assignments have void result type, they should have already set the parameter value when they
+            // were evaluated in the loop above.
+            if (evaluated[i].type.id != tid_void) {
+                current_stack.values[i] = convert_value_to_type(
+                    state, evaluated[i].dereference(), arguments[i]->location, {symbol->type, symbol->definition});
+            } else {
+                assert(current_stack.values[i].type.id != tid_undefined);
+// After the initial named parameter, all following values should be named parameters.
+#ifdef _DEBUG
+                for (auto j = i, evaluated_count = (int)evaluated.size(); j < evaluated_count; ++j) {
+                    assert(evaluated[j].type.id == tid_void);
+                }
+#endif
+                break;
+            }
         }
     }
 
