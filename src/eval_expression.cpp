@@ -516,6 +516,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_and_
     if (!lhs->try_convert_to_bool(&lhs_value)) {
         throw tg_exeption("Invalid operator and on non boolean value.", exp->lhs->location);
     }
+    if (!lhs_value) return make_any(false);
 
     any_t rhs_ref = evaluate_expression_throws(state, exp->rhs.get());
     auto rhs = rhs_ref.dereference();
@@ -523,8 +524,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_and_
     if (!rhs->try_convert_to_bool(&rhs_value)) {
         throw tg_exeption("Invalid operator and on non boolean value", exp->rhs->location);
     }
-
-    return make_any(lhs_value && rhs_value);
+    return make_any(rhs_value);
 }
 any_t evaluate_expression_concrete(process_state_t* state, const expression_or_t* exp) {
     any_t lhs_ref = evaluate_expression_throws(state, exp->lhs.get());
@@ -533,6 +533,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_or_t
     if (!lhs->try_convert_to_bool(&lhs_value)) {
         throw tg_exeption("Invalid operator or on non boolean value.", exp->lhs->location);
     }
+    if (lhs_value) return make_any(true);
 
     any_t rhs_ref = evaluate_expression_throws(state, exp->rhs.get());
     auto rhs = rhs_ref.dereference();
@@ -540,8 +541,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_or_t
     if (!rhs->try_convert_to_bool(&rhs_value)) {
         throw tg_exeption("Invalid operator or on non boolean value", exp->rhs->location);
     }
-
-    return make_any(lhs_value || rhs_value);
+    return make_any(rhs_value);
 }
 
 any_t evaluate_expression_concrete(process_state_t* state, const expression_assign_t* exp) {
