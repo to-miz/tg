@@ -13,6 +13,7 @@ struct symbol_entry_t {
     };
 
     // This is used when invoking and evaluating expressions.
+    int stack_index = -1;        // Only set for globals.
     int stack_value_index = -1;  // Index into process_state.value_stack[current_stack].values[stack_index].
     // For symbols that refer to variables, whether the declaration of the symbol has been processed yet.
     // Checking for this field enables us to check whether a variable was referenced before it was declared.

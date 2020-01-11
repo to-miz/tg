@@ -352,6 +352,12 @@ any_t string_kebab_case_call(array_view<any_t> arguments) {
     return make_any(result);
 }
 
+any_t string_call_starts_with(array_view<any_t> arguments) {
+    auto& lhs = arguments[0].dereference()->as_string();
+    auto& rhs = arguments[1].dereference()->as_string();
+    return make_any(lhs.starts_with(rhs));
+}
+
 void init_builtin_string(builtin_type_t* type) {
     type->name = "string";
     type->properties = {{"size", {tid_int, 0}, string_get_size_property}};
@@ -364,6 +370,7 @@ void init_builtin_string(builtin_type_t* type) {
         {"trim", 0, 0, string_no_arguments_method, string_call_trim},
         {"trim_left", 0, 0, string_no_arguments_method, string_call_trim_left},
         {"trim_right", 0, 0, string_no_arguments_method, string_call_trim_right},
+        {"starts_with", 1, 1, string_are_append_arguments_valid, string_call_starts_with},
 
         {"camel_case", 0, 0, string_no_arguments_method, string_camel_case_call},
         {"pascal_case", 0, 0, string_no_arguments_method, string_pascal_case_call},
