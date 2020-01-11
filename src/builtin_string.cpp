@@ -358,6 +358,68 @@ any_t string_call_starts_with(array_view<any_t> arguments) {
     return make_any(lhs.starts_with(rhs));
 }
 
+builtin_arguments_valid_result_t string_are_arguments_int(const builtin_state_t& /*state*/,
+                                                          array_view<const typeid_info_match> arguments) {
+    builtin_arguments_valid_result_t result = {{tid_int, 0, nullptr}, {tid_bool, 0, nullptr}};
+    if (!arguments[0].is(tid_string, 0)) {
+        result.valid = false;
+        result.invalid_index = 0;
+    } else {
+        for (int i = 1, count = (int)arguments.size(); i < count; ++i) {
+            if (arguments[i].id != tid_int) {
+                result.valid = false;
+                result.invalid_index = i;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+any_t string_call_substr(array_view<any_t> arguments) {
+    auto& lhs = arguments[0].dereference()->as_string();
+    auto stream = tmu_utf8_make_stream_n(lhs.data(), lhs.size());
+    if (arguments.size() == 2) {
+        auto rhs = arguments[1].dereference()->as_int();
+        for (int i = 0; i < rhs; ++i) {
+            uint32_t cp = 0;
+            tmu_utf8_extract(&stream, &cp);
+        }
+        return make_any(string_view{stream.cur, stream.end});
+    }
+    auto left = arguments[1].dereference()->as_int();
+    auto right = arguments[2].dereference()->as_int();
+    for (int i = 0; i < left; ++i) {
+        uint32_t cp = 0;
+        tmu_utf8_extract(&stream, &cp);
+    }
+    const char* first = stream.cur;
+    for (int i = left; i < right; ++i) {
+        uint32_t cp = 0;
+        tmu_utf8_extract(&stream, &cp);
+    }
+    return make_any(string_view{first, stream.cur});
+}
+
+builtin_arguments_valid_result_t string_find_args(const builtin_state_t& /*state*/,
+                                                  array_view<const typeid_info_match> arguments) {
+    builtin_arguments_valid_result_t result = {{tid_string, 0, nullptr}, {tid_int, 0, nullptr}};
+    for (int i = 0, count = (int)arguments.size(); i < count; ++i) {
+        if (arguments[i].id != tid_string) {
+            result.valid = false;
+            result.invalid_index = i;
+            break;
+        }
+    }
+    return result;
+}
+
+any_t string_call_find(array_view<any_t> arguments) {
+    auto& lhs = arguments[0].dereference()->as_string();
+    auto& rhs = arguments[1].dereference()->as_string();
+    return make_any((int)lhs.find(rhs));
+}
+
 void init_builtin_string(builtin_type_t* type) {
     type->name = "string";
     type->properties = {{"size", {tid_int, 0}, string_get_size_property}};
@@ -371,6 +433,8 @@ void init_builtin_string(builtin_type_t* type) {
         {"trim_left", 0, 0, string_no_arguments_method, string_call_trim_left},
         {"trim_right", 0, 0, string_no_arguments_method, string_call_trim_right},
         {"starts_with", 1, 1, string_are_append_arguments_valid, string_call_starts_with},
+        {"substr", 1, 2, string_are_arguments_int, string_call_substr},
+        {"find", 1, 1, string_find_args, string_call_find},
 
         {"camel_case", 0, 0, string_no_arguments_method, string_camel_case_call},
         {"pascal_case", 0, 0, string_no_arguments_method, string_pascal_case_call},
