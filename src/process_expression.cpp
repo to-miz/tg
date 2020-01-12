@@ -6,6 +6,12 @@ bool is_expression_convertible_to(process_state_t* state, expression_t* exp, typ
     if (is_convertible(exp->result_type, to)) {
         if (exp->value_category == exp_value_constant) evaluate_constant_expression(state, exp, compile_time_value);
         success = true;
+    } else if (exp->value_category == exp_value_constant && exp->result_type.id == tid_undefined &&
+               exp->result_type.array_level > 0 && exp->result_type.array_level <= to.array_level) {
+        // Special case for empty arrays without a type. They can be converted to any other array type.
+        exp->result_type.id = to.id;
+        evaluate_constant_expression(state, exp, compile_time_value);
+        success = true;
     } else if (exp->value_category == exp_value_constant) {
         if (to.id == tid_bool) {
             // Only the int literals 1 and 0 are convertible to bool.
@@ -248,7 +254,7 @@ bool infer_expression_types_concrete_generator(process_state_t* state, expressio
         auto* unique_arg = &args->at(i);
         auto* arg = unique_arg->get();
         if (!infer_expression_types_expression(state, arg)) return false;
-        assert(arg->result_type.id != tid_undefined);
+        assert(arg->result_type.id != tid_undefined || arg->result_type.array_level > 0);
 
         const symbol_entry_t* symbol = nullptr;
 
