@@ -1,4 +1,4 @@
-# Configurable summodule makefile for use with platform.mk.
+# Configurable submodule makefile for use with platform.mk.
 
 # Configurable variables.
 tg_build ?= ${BUILD}
