@@ -375,7 +375,7 @@ any_t string_call_starts_with(array_view<any_t> arguments) {
 
 builtin_arguments_valid_result_t string_are_arguments_int(const builtin_state_t& /*state*/,
                                                           array_view<const typeid_info_match> arguments) {
-    builtin_arguments_valid_result_t result = {{tid_int, 0, nullptr}, {tid_bool, 0, nullptr}};
+    builtin_arguments_valid_result_t result = {{tid_int, 0, nullptr}, {tid_string, 0, nullptr}};
     if (!arguments[0].is(tid_string, 0)) {
         result.valid = false;
         result.invalid_index = 0;
