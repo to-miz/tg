@@ -27,6 +27,7 @@ FIXME:
 #include <string>
 #include <algorithm>
 #include <utility>
+#include <set>
 
 using std::begin;
 using std::end;

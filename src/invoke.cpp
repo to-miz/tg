@@ -323,13 +323,54 @@ void evaluate_call(process_state_t* state, const generator_t& generator, const v
         }
     }
 
-    vector<any_t> evaluated;
-    for (const auto& arg : arguments) {
-        evaluated.emplace_back(evaluate_expression_throws(state, arg.get()));
-    }
-
     auto scope_index = generator.scope_index;
-    auto prev_scope_index = state->set_scope(scope_index);
+    bool named_arguments_started = false;
+    vector<any_t> evaluated;
+    evaluated.resize(arguments.size());
+#ifdef _DEBUG
+    std::set<int> evaluated_arguments;
+#endif
+    for (int i = 0, arg_count = (int)arguments.size(); i < arg_count; ++i) {
+        auto arg_exp = arguments[i].get();
+        if (arg_exp->type == exp_assign) {
+            // Special handling of named parameter passing.
+            // The names are in the inner scope, while the expressions need to be evaluated in the outer scope.
+            // For this we decompose the expression into lhs and rhs. Lhs is guaranteed to be an identifier expression.
+            // We get the stack position of the identifier and evaluate rhs in the outer scope.
+            // Then we set the stack value of the inner scope to the evaluated value.
+            auto assign = static_cast<const expression_assign_t*>(arg_exp);
+            auto lhs = assign->lhs.get();
+            assert(lhs->type == exp_identifier);
+            auto identifier = static_cast<const expression_identifier_t*>(lhs);
+            assert(identifier->result_type.id != tid_function);
+            auto symbol = identifier->symbol;
+            assert(symbol);
+            assert(symbol->stack_value_index < count);
+            assert(
+                std::find_if(generator.parameters.begin(), generator.parameters.end(), [identifier](const auto& param) {
+                    return param.variable.contents == identifier->identifier;
+                }) != generator.parameters.end());
+            assert(symbol == state->find_symbol_flat(identifier->identifier, scope_index));
+            MAYBE_UNUSED(symbol);
+            assert(symbol);
+            auto rhs = assign->rhs.get();
+            evaluated[symbol->stack_value_index] = evaluate_expression_throws(state, rhs);
+            named_arguments_started = true;
+#ifdef _DEBUG
+            if (!evaluated_arguments.insert(symbol->stack_value_index).second) {
+                assert(0 && "Internal error.");
+            }
+#endif
+        } else {
+            assert(!named_arguments_started);
+            evaluated[i] = evaluate_expression_throws(state, arg_exp);
+#ifdef _DEBUG
+            if (!evaluated_arguments.insert(i).second) {
+                assert(0 && "Internal error.");
+            }
+#endif
+        }
+    }
 
     for (int i = 0; i < count; ++i) {
         auto& param = generator.parameters[i];
@@ -337,27 +378,27 @@ void evaluate_call(process_state_t* state, const generator_t& generator, const v
         assert(symbol);
         assert(symbol->stack_value_index == i);
 
-        if (i < required_parameters) {
-            // Named assignments have void result type, they should have already set the parameter value when they
-            // were evaluated in the loop above.
-            if (evaluated[i].type.id != tid_void) {
-                current_stack.values[i] = convert_value_to_type(
-                    state, evaluated[i].dereference(), arguments[i]->location, {symbol->type, symbol->definition});
-            } else {
-                assert(current_stack.values[i].type.id != tid_undefined);
+        // Named assignments have void result type, they should have already set the parameter value when they
+        // were evaluated in the loop above.
+        if (i >= (int)evaluated.size()) break;
+        if (evaluated[i].type.id != tid_void) {
+            current_stack.values[i] = convert_value_to_type(
+                state, evaluated[i].dereference(), arguments[i]->location, {symbol->type, symbol->definition});
+        } else {
+            assert(current_stack.values[i].type.id != tid_undefined);
 // After the initial named parameter, all following values should be named parameters.
 #ifdef _DEBUG
-                for (auto j = i, evaluated_count = (int)evaluated.size(); j < evaluated_count; ++j) {
-                    assert(evaluated[j].type.id == tid_void);
-                }
-#endif
-                break;
+            for (auto j = i, evaluated_count = (int)evaluated.size(); j < evaluated_count; ++j) {
+                assert(evaluated[j].type.id == tid_void);
             }
+#endif
+            break;
         }
     }
 
     // Actual invocation and evaluation happens in evaluate_literal_body.
     state->value_stack.push_back(std::move(current_stack));
+    auto prev_scope_index = state->set_scope(scope_index);
     evaluate_literal_body(state, generator.body);
     if (state->output.whitespace.preceding_newlines) fprintf(state->output.stream, "\n");
 
