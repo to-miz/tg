@@ -84,6 +84,7 @@ struct string_token {
     string_token() = default;
     // Implicit conversion from token.
     string_token(token_t token) : contents(token.contents), location(token.location) {}
+    string_token(string_view contents, stream_loc_t location) : contents(contents), location(location) {}
 };
 
 struct file_data {

@@ -36,6 +36,17 @@ struct array_view {
     T* begin() const { return ptr; }
     T* end() const { return ptr + sz; }
     bool empty() const { return sz == 0; }
+
+    T& operator[](size_t index) {
+        assert(ptr);
+        assert(index < sz);
+        return ptr[index];
+    }
+    const T& operator[](size_t index) const {
+        assert(ptr);
+        assert(index < sz);
+        return ptr[index];
+    }
 };
 
 struct static_string {

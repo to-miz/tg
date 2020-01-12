@@ -88,7 +88,7 @@ struct parsing_state_t;
 struct source_file_location {
     file_data file;
     stream_loc_t location;
-    int length;
+    int length = 1;
 
     source_file_location(file_data file, stream_loc_t location, int length = 1)
         : file(file), location(location), length(length) {}
@@ -201,6 +201,9 @@ void print_error_context_helper(string_view message, source_file_location source
 }
 
 // Specific error reporting functions.
+PRINT_ERROR_DEF(internal_error, source_file_location source) {
+    PRINT_ERROR_CONTEXT_CALL("Internal error.", source.file, source.location, source.length);
+}
 
 PRINT_ERROR_DEF(unknown_specifier, source_file_location source, string_view name) {
     auto msg = print_string("Unknown type specifier %.*s.", PRINT_SW(name));

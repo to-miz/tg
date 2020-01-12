@@ -10,8 +10,7 @@ struct tg_exeption {
 };
 
 any_t evaluate_expression_throws(process_state_t* state, const expression_t* exp);
-void evaluate_call(process_state_t* state, const generator_t& generator, const vector<any_t>& args,
-                   const vector<stream_loc_ex_t>& arg_locations);
+void evaluate_call(process_state_t* state, const generator_t& generator, const vector<unique_expression_t>& arguments);
 
 bool check_array_of_matches(const any_t* value, typeid_info_match to) {
     assert(value->type.array_level == to.array_level);
@@ -97,7 +96,8 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_iden
     if (!symbol) throw tg_exeption("Unknown identifier.", exp->location);
 
     assert(symbol->stack_value_index >= 0);
-    auto value = state->value_stack.back().values[symbol->stack_value_index].dereference();
+    auto stack = &state->value_stack.back();
+    auto value = stack->values[symbol->stack_value_index].dereference();
 
     assert(value->type.is(symbol->type.id, symbol->type.array_level) ||
            (value->type.id == tid_pattern && symbol->type.id == tid_sum));
@@ -146,22 +146,27 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_call
 
     vector<any_t> arguments;
     vector<stream_loc_ex_t> argument_locations;
-    for (const auto& arg : exp->arguments) {
-        arguments.emplace_back(evaluate_expression_throws(state, arg.get()));
-        argument_locations.emplace_back(arg->location);
+    if (lhs->type.id != tid_generator) {
+        // Generator will evaluate its own arguments.
+        for (const auto& arg : exp->arguments) {
+            arguments.emplace_back(evaluate_expression_throws(state, arg.get()));
+            argument_locations.emplace_back(arg->location);
+        }
     }
     if (exp->method) {
-        return exp->method->call_method(lhs, arguments);
+        // Add this pointer to arguments.
+        arguments.insert(arguments.begin(), make_any_ref(lhs));
+        return exp->method->call(arguments);
     }
     assert(lhs->type.is_callable());
     switch (lhs->type.id) {
         case tid_function: {
             auto builtin_function = lhs->as_function();
-            return builtin_function->func(arguments);
+            return builtin_function->call(arguments);
         }
         case tid_generator: {
             auto generator = lhs->as_generator();
-            evaluate_call(state, *generator, arguments, argument_locations);
+            evaluate_call(state, *generator, exp->arguments);
             return make_any_void();
         }
         default: {
@@ -176,21 +181,32 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_subs
 
     any_t lhs_ref = evaluate_expression_throws(state, exp->lhs.get());
     auto lhs = lhs_ref.dereference();
-    if (!lhs->is_array()) {
-        throw tg_exeption("Expression is not subscriptable.", exp->lhs->location);
+    const bool is_array = (lhs->type.array_level > 0);
+    const builtin_operator_t* subscript = nullptr;
+    if (!is_array) {
+        auto builtin = state->builtin.get_builtin_type(lhs->type);
+        if (!builtin || (subscript = builtin->get_operator(bop_subscript)) == nullptr) {
+            throw tg_exeption("Expression is not subscriptable.", exp->lhs->location);
+        }
     }
 
-    auto& array = lhs->as_array();
     any_t rhs_ref = evaluate_expression_throws(state, exp->rhs.get());
     auto rhs = rhs_ref.dereference();
-    int subscript_value = 0;
-    if (!rhs->try_convert_to_int(&subscript_value)) {
-        throw tg_exeption("Expression is not implicitly convertible to int for subscription.", exp->rhs->location);
+    if (is_array) {
+        auto& array = lhs->as_array();
+        int subscript_value = 0;
+        bool conversion_success = rhs->try_convert_to_int(&subscript_value);
+        // Conversion must succeed, otherwise infer_expression_types failed.
+        assert_maybe_unused(conversion_success);
+        if (!is_valid_index(array.size(), subscript_value)) {
+            throw tg_exeption("Subscript out of range.", exp->rhs->location);
+        }
+        result = make_any_ref(&array[subscript_value]);
+    } else {
+        assert(subscript);
+        any_t arguments[2] = {make_any_ref(lhs), make_any_ref(rhs)};
+        result = subscript->call(arguments);
     }
-    if (subscript_value < 0 || (size_t)subscript_value >= array.size()) {
-        throw tg_exeption("Subscript out of range.", exp->rhs->location);
-    }
-    result = make_any_ref(&array[subscript_value]);
     return result;
 }
 any_t evaluate_expression_concrete(process_state_t* state, const expression_instanceof_t* exp) {
@@ -232,37 +248,31 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_dot_
                     auto pattern = &definition->pattern;
                     auto field_index = pattern->find_field_index(field.contents);
                     assert(field_index >= 0);
-                    auto match_index = pattern->fields[field_index].match_index;
 
-                    auto match_entry = &pattern->match_entries[match_index];
-                    if (match_entry->type == mt_custom) {
-                        value_ref = make_any_ref(&match->field_values[field_index]);
-                        continue;
-                    }
-
-                    assert(i + 1 == count);
-                    return make_any_ref(&match->field_values[field_index]);
+                    value_ref = make_any_ref(&match->field_values[field_index]);
                 } else {
                     // There can't be an instance of a sum type, it is always a concrete matched pattern.
                     assert(0 && "Internal error.");
                 }
-                break;
+                continue;
             }
             case inferred_field_t::ft_property: {
                 assert(concrete.property);
-                value_ref = concrete.property->get_property(value);
-                break;
+                value_ref = concrete.property->call({value, 1});
+                continue;
             }
             case inferred_field_t::ft_method: {
-                // This should not happen.
-                assert(0 && "Internal error.");
-                break;
+                // This only happens if a method is specified without calling it like "str.upper".
+                // Otherwise, this would be a call expression.
+                value_ref = make_any_void();
+                continue;
             }
-            default: {
-                assert(0 && "Internal error.");
+            case inferred_field_t::ft_none: {
                 break;
             }
         }
+        assert(0 && "Internal error.");
+        break;
     }
 
     return value_ref;
@@ -506,6 +516,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_and_
     if (!lhs->try_convert_to_bool(&lhs_value)) {
         throw tg_exeption("Invalid operator and on non boolean value.", exp->lhs->location);
     }
+    if (!lhs_value) return make_any(false);
 
     any_t rhs_ref = evaluate_expression_throws(state, exp->rhs.get());
     auto rhs = rhs_ref.dereference();
@@ -513,8 +524,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_and_
     if (!rhs->try_convert_to_bool(&rhs_value)) {
         throw tg_exeption("Invalid operator and on non boolean value", exp->rhs->location);
     }
-
-    return make_any(lhs_value && rhs_value);
+    return make_any(rhs_value);
 }
 any_t evaluate_expression_concrete(process_state_t* state, const expression_or_t* exp) {
     any_t lhs_ref = evaluate_expression_throws(state, exp->lhs.get());
@@ -523,6 +533,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_or_t
     if (!lhs->try_convert_to_bool(&lhs_value)) {
         throw tg_exeption("Invalid operator or on non boolean value.", exp->lhs->location);
     }
+    if (lhs_value) return make_any(true);
 
     any_t rhs_ref = evaluate_expression_throws(state, exp->rhs.get());
     auto rhs = rhs_ref.dereference();
@@ -530,8 +541,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_or_t
     if (!rhs->try_convert_to_bool(&rhs_value)) {
         throw tg_exeption("Invalid operator or on non boolean value", exp->rhs->location);
     }
-
-    return make_any(lhs_value || rhs_value);
+    return make_any(rhs_value);
 }
 
 any_t evaluate_expression_concrete(process_state_t* state, const expression_assign_t* exp) {
@@ -546,6 +556,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_assi
     } else if (lhs->type.is(tid_bool, 0)) {
         *lhs = make_any(rhs->convert_to_bool());
     } else {
+        break_if(!(lhs->type == rhs->type));
         assert(lhs->type == rhs->type);
         *lhs = *rhs;
     }

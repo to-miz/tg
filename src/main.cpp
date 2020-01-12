@@ -1,3 +1,19 @@
+/*
+TODO:
+    - Implement a builtin abort/exit/fail function that displays an error message.
+    - Pattern matching should not be compile time only, there should be a try_match function or similar.
+    - Implement comments.
+    - Implement string printing in the scripting language.
+    - Implement string escaping/quoting.
+    - Implement multiple output files (header/implementation).
+        - Add file io functions, for instance for generating boilerplate code if a file doesn't exist.
+    - Implement direct clang-format integration through a command line option.
+    - Implement tuples/structs.
+FIXME:
+    - An expression like range(1, -) results in assertion failure in monotonic_allocator.h.
+    - eval_expression errors do not result in returing -1 from main.
+*/
+
 /* crt */
 #include <cassert>
 #include <cstddef>
@@ -11,11 +27,13 @@
 #include <string>
 #include <algorithm>
 #include <utility>
+#include <set>
 
 using std::begin;
 using std::end;
 using std::move;
 using std::size_t;
+
 using std::string;
 using std::unique_ptr;
 using std::vector;
@@ -34,6 +52,54 @@ using std::min;
 
 #define UNREFERENCED_PARAM(x) ((void)x)
 #define MAYBE_UNUSED(x) ((void)x)
+// clang-format off
+#ifndef NDEBUG
+    #define assert_maybe_unused(x) assert(x)
+#else
+    #define assert_maybe_unused(x) ((void)(x))
+#endif
+#ifdef _DEBUG
+    #ifdef _MSC_VER
+        #define debug_break __debugbreak
+        #define break_if(x)            \
+            {                          \
+                if (x) __debugbreak(); \
+            }
+    #elif defined(_WIN32)
+        #define debug_break DebugBreak
+        #define break_if(x)          \
+            {                        \
+                if (x) DebugBreak(); \
+            }
+    #else
+        #include <signal.h>
+        #define debug_break() raise(SIGTRAP)
+        #define break_if(x)            \
+            {                          \
+                if (x) raise(SIGTRAP); \
+            }
+    #endif
+
+    #define DEBUG_WRAPPER(x) \
+        do {                 \
+            x;               \
+        } while (false)
+#else
+    #define DEBUG_WRAPPER(x) ((void)0)
+    #define break_if(x) ((void)0)
+    #define debug_break() ((void)0)
+#endif
+// clang-format on
+
+#if 0
+#ifdef assert
+#undef assert
+#endif
+
+#define assert(cond) break_if(!(cond))
+#endif
+
+inline bool is_valid_index(size_t size, int index) { return index >= 0 && (size_t)index < size; }
 
 bool operator==(string_view a, string_view b) { return tmsu_equals_n(a.begin(), a.end(), b.begin(), b.end()); }
 bool operator!=(string_view a, string_view b) { return !tmsu_equals_n(a.begin(), a.end(), b.begin(), b.end()); }
@@ -47,9 +113,14 @@ bool operator!=(string_view a, string_view b) { return !tmsu_equals_n(a.begin(),
 #include "typeinfo.h"
 #include "match_type_definition.h"
 #include "any.h"
+
+#include "builtin_type.h"
 #include "builtin_functions.h"
-#include "builtin_properties.h"
-#include "builtin_methods.h"
+#include "builtin_array.cpp"
+#include "builtin_string.cpp"
+#include "builtin_state.h"
+#include "json_extension.cpp"
+#include "builtin_state.cpp"
 
 enum class parse_result { no_match, error, success };
 // We want the properties of enum class without the verbosity.
@@ -120,6 +191,7 @@ bool parse_file(parsed_state_t* parsed, string_view filename) {
     assert(parsed);
 
     parsing_state_t parsing = {parsed};
+    parsing.current_stack_size = parsed->toplevel_stack_size;
     auto& source_files = parsed->source_files;
     assert(source_files.empty());
     source_files.push_back({/*contents=*/{}, filename, /*file_index=*/0, /*parsed=*/false});
@@ -129,7 +201,5 @@ bool parse_file(parsed_state_t* parsed, string_view filename) {
     }
     return false;
 }
-
-// #include "debug_printing.h"
 
 #include "cli.cpp"

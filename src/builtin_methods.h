@@ -61,6 +61,33 @@ builtin_arguments_valid_result_t string_are_append_params_valid(typeid_info_matc
     return result;
 }
 
+builtin_arguments_valid_result_t string_are_starts_with_params_valid(typeid_info_match lhs,
+                                                                     const vector<typeid_info_match>& arguments) {
+    assert(lhs.is(tid_string, 0));
+    MAYBE_UNUSED(lhs);
+    builtin_arguments_valid_result_t result = {true, 0, {tid_string, 0, nullptr}, {tid_bool, 0, nullptr}};
+    if (arguments.size() != 2) {
+        result.valid = false;
+        result.invalid_index = (arguments.size() == 1) ? 1 : 2;
+    } else {
+        for (int i = 0, count = (int)arguments.size(); i < count; ++i) {
+            auto arg = arguments[i];
+            if (!arg.is(tid_string, 0)) {
+                result.valid = false;
+                result.invalid_index = i;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+any_t string_call_starts_with(any_t* lhs, const vector<any_t>& arguments) {
+    auto& str = lhs->as_string();
+    auto& rhs = arguments[0].dereference()->as_string();
+    return make_any(str.starts_with(rhs));
+}
+
 any_t string_call_append(any_t* lhs, const vector<any_t>& arguments) {
     auto& str = lhs->as_string();
     auto& rhs = arguments[0].dereference()->as_string();
@@ -70,6 +97,7 @@ any_t string_call_append(any_t* lhs, const vector<any_t>& arguments) {
 
 any_t string_call_lower(any_t* lhs, const vector<any_t>& arguments) {
     assert(arguments.empty());
+    MAYBE_UNUSED(arguments);
     auto& str = lhs->as_string();
     auto result = std::string(str.size(), 0);
     auto conversion = tmu_utf8_to_lower(str.data(), str.size(), result.data(), result.size());
@@ -83,6 +111,7 @@ any_t string_call_lower(any_t* lhs, const vector<any_t>& arguments) {
 
 any_t string_call_upper(any_t* lhs, const vector<any_t>& arguments) {
     assert(arguments.empty());
+    MAYBE_UNUSED(arguments);
     auto& str = lhs->as_string();
     auto result = std::string(str.size(), 0);
     auto conversion = tmu_utf8_to_upper(str.data(), str.size(), result.data(), result.size());
@@ -96,6 +125,7 @@ any_t string_call_upper(any_t* lhs, const vector<any_t>& arguments) {
 
 any_t string_call_trim(any_t* lhs, const vector<any_t>& arguments) {
     assert(arguments.empty());
+    MAYBE_UNUSED(arguments);
     auto& str = lhs->as_string();
     auto trimmed = tmsu_trim_n(str.data(), str.data() + str.size());
     return make_any(std::string(trimmed.begin(), trimmed.end()));
@@ -103,6 +133,7 @@ any_t string_call_trim(any_t* lhs, const vector<any_t>& arguments) {
 
 any_t string_call_trim_left(any_t* lhs, const vector<any_t>& arguments) {
     assert(arguments.empty());
+    MAYBE_UNUSED(arguments);
     auto& str = lhs->as_string();
 
     const char* first = str.data();
@@ -113,6 +144,7 @@ any_t string_call_trim_left(any_t* lhs, const vector<any_t>& arguments) {
 
 any_t string_call_trim_right(any_t* lhs, const vector<any_t>& arguments) {
     assert(arguments.empty());
+    MAYBE_UNUSED(arguments);
     auto& str = lhs->as_string();
 
     const char* first = str.data();
@@ -154,7 +186,7 @@ any_t string_call_split(any_t* lhs, const vector<any_t>& arguments) {
     return make_any(std::move(result), {tid_string, 1});
 }
 
-static const builtin_method_t builtin_methods[] = {
+static const builtin_method_t internal_builtin_methods[] = {
     {1, 1, "append", builtin_is_any_array, array_are_append_arguments_valid, array_call_append},
 
     {1, 1, "append", builtin_is_string, string_are_append_params_valid, string_call_append},
@@ -163,6 +195,7 @@ static const builtin_method_t builtin_methods[] = {
     {0, 0, "trim", builtin_is_string, builtin_string_no_params_method, string_call_trim},
     {0, 0, "trim_left", builtin_is_string, builtin_string_no_params_method, string_call_trim_left},
     {0, 0, "trim_right", builtin_is_string, builtin_string_no_params_method, string_call_trim_right},
+    {1, 1, "starts_with", builtin_is_string, string_are_append_params_valid, string_call_starts_width},
 
     {1, 1, "split", builtin_is_string, string_are_split_params_valid, string_call_split},
 };

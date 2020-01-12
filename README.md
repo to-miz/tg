@@ -45,6 +45,12 @@ static char const * const test_strings[] = {
 };
 ```
 
+## Cloning
+Clone this repository like this, since it uses submodules.
+```
+TODO: git command
+```
+
 ## Compiling
 You first require a modern C++ compiler that supports C++17.
 

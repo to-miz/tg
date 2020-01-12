@@ -45,7 +45,10 @@ ifeq (${OS},Windows_NT)
 
 	clean_build_dir := del /f/q/s \
 	                   ${build_dir_root}*.exe ${build_dir_root}*.lib ${build_dir_root}*.dll \
-	                   ${build_dir_root}*.obj ${build_dir_root}*.pdb >nul 2>nul
+	                   ${build_dir_root}*.obj ${build_dir_root}*.pdb ${build_dir_root}*.exp >nul 2>nul
+
+	shell_random := cmd /c "echo %RANDOM%"
+	shell_delete = del /f/q/s "${1}${path_sep}${2}" >nul 2>nul
 else
 	os := linux
 	exe_ext := .out
@@ -60,6 +63,9 @@ else
 	clean_build_dir := find ${build_dir_root} -type f \
 	                   \( -name "*.out" -o -name "*.a" -o -name "*.so" -o -name "*.o" \) \
 	                   -delete
+
+	shell_random := /bin/bash -c "echo $$RANDOM"
+	shell_delete = find /f/q/s "${1}" -name "${2}" -type f -delete
 endif
 
 # Helper functions.
@@ -229,13 +235,15 @@ c_options.cl         = ${c_options.cl.${BUILD}} ${options.cl}
 link_options.cl.debug   :=
 link_options.cl.release := -ltcg
 # Subsystem is either CONSOLE or WINDOWS most of the time.
-link_options.cl         = -subsystem:CONSOLE -incremental:NO -nologo ${link_options.cl.${BUILD}}
+link_options.cl.subsystem := CONSOLE
+link_options.cl         = -subsystem:${link_options.cl.subsystem} -incremental:NO -nologo ${link_options.cl.${BUILD}}
 
 link_libs.cl.debug    :=
 link_libs.cl.release  :=
 link_libs.cl          = ${link_libs.cl.${BUILD}}
 
-output_directive.cl   = -Fd"${1}.pdb" -Fe"${1}" -Fo"${1}${obj_ext}" -link -out:"${1}"
+pdb_suffix.cl :=
+output_directive.cl   = -Fd"${1}${pdb_suffix.cl}.pdb" -Fe"${1}" -Fo"${build_dir}/" -link -out:"${1}"
 
 # Generic
 
@@ -249,6 +257,10 @@ c_link_libs = ${LDLIBS} ${link_libs.${c_compiler_selector}}
 empty :=
 space := ${empty} ${empty}
 comma := ,
+define newline :=
+
+
+endef
 
 # Compilation commands
 # ${1} Source files

@@ -6,6 +6,12 @@ bool is_expression_convertible_to(process_state_t* state, expression_t* exp, typ
     if (is_convertible(exp->result_type, to)) {
         if (exp->value_category == exp_value_constant) evaluate_constant_expression(state, exp, compile_time_value);
         success = true;
+    } else if (exp->value_category == exp_value_constant && exp->result_type.id == tid_undefined &&
+               exp->result_type.array_level > 0 && exp->result_type.array_level <= to.array_level) {
+        // Special case for empty arrays without a type. They can be converted to any other array type.
+        exp->result_type.id = to.id;
+        evaluate_constant_expression(state, exp, compile_time_value);
+        success = true;
     } else if (exp->value_category == exp_value_constant) {
         if (to.id == tid_bool) {
             // Only the int literals 1 and 0 are convertible to bool.
@@ -71,16 +77,33 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
 
     switch (exp->type) {
         case exp_subscript: {
-            if (lhs->result_type.array_level <= 0) {
-                print_error_context("Expression is not an array.", {state, lhs->location});
-                return false;
+            const bool is_array = (lhs->result_type.array_level > 0);
+            const builtin_operator_t* subscript = nullptr;
+            if (!is_array) {
+                auto builtin = state->builtin.get_builtin_type(lhs->result_type);
+                if (!builtin || (subscript = builtin->get_operator(bop_subscript)) == nullptr) {
+                    print_error_context("Expression is not subscriptable.", {state, lhs->location});
+                    return false;
+                }
             }
-            exp->result_type = get_dereferenced_type(lhs->result_type);
+            if (is_array) {
+                exp->result_type = get_dereferenced_type(lhs->result_type);
+            } else {
+                assert(subscript);
+                const typeid_info_match types[2] = {{lhs->result_type, lhs->definition},
+                                                    {rhs->result_type, rhs->definition}};
+                auto check_result = subscript->check(state->builtin, types);
+                if (!check_result.valid) {
+                    print_error_type(conversion, {state, rhs->location}, rhs->result_type, check_result.expected);
+                    return false;
+                }
+                exp->result_type = check_result.result_type;
+            }
             exp->definition = lhs->definition;
 
             // Determine wheter value category is reference.
             // This can only happen at this stage and not while parsing, because the symbol table is only now available.
-            if (lhs->value_category == exp_value_reference) {
+            if (is_array && (lhs->value_category == exp_value_reference)) {
                 // One of these cases:
                 // array[0] <- reference
                 // array[index] <- reference
@@ -175,12 +198,10 @@ bool infer_expression_types_concrete_expression(process_state_t*, expression_con
 }
 bool infer_expression_types_concrete_expression(process_state_t* state, expression_identifier_t* exp) {
     auto identifier = exp->identifier;
-    for (const auto& entry : builtin_functions) {
-        if (identifier == entry.name) {
-            exp->result_type = {tid_function, 0};
-            exp->builtin_function = &entry;
-            return true;
-        }
+    if (auto function = state->builtin.get_builtin_function(identifier)) {
+        exp->result_type = {tid_function, 0};
+        exp->builtin_function = function;
+        return true;
     }
     auto symbol = state->find_symbol(exp->identifier);
     if (!symbol) {
@@ -221,19 +242,75 @@ bool infer_expression_types_concrete_generator(process_state_t* state, expressio
     auto generator = generator_symbol->generator;
 
     int arguments_count = (int)args->size();
-    if (arguments_count < generator->required_parameters) {
-        auto msg = print_string("Not enough parameters to generator \"%.*s\".", PRINT_SW(generator->name.contents));
-        print_error_context(msg, {state, exp->location});
-        return false;
-    }
+    // We set the scope of the generator here, so identifiers referencing named generator parameters can be found.
+    auto old_scope = state->set_scope(generator->scope_index);
 
+    bool started_named_params = false;
+    const int required_params_count = generator->required_parameters;
+    int supplied_required_params_count = 0;
+
+    vector<int> supplied_params;
     for (int i = 0; i < arguments_count; ++i) {
-        auto* arg = args->at(i).get();
-        // Arguments should already be inferred by caller.
-        assert(arg->result_type.id != tid_undefined);
+        auto* unique_arg = &args->at(i);
+        auto* arg = unique_arg->get();
+        if (!infer_expression_types_expression(state, arg)) return false;
+        assert(arg->result_type.id != tid_undefined || arg->result_type.array_level > 0);
 
-        const auto* param = &generator->parameters[i];
-        const auto* symbol = state->find_symbol_flat(param->variable.contents, generator->scope_index);
+        const symbol_entry_t* symbol = nullptr;
+
+        if (arg->type == exp_assign) {
+            // Check if assignment is as named parameter assignment.
+            bool is_named_param = false;
+
+            auto assign = static_cast<expression_assign_t*>(arg);
+            auto arg_lhs = assign->lhs.get();
+            if (arg_lhs->type == exp_identifier) {
+                auto arg_identifier = static_cast<expression_identifier_t*>(arg_lhs);
+                int param_index = generator->find_parameter_index(arg_identifier->identifier);
+                if (param_index >= 0) {
+                    if (find(supplied_params.begin(), supplied_params.end(), param_index) != supplied_params.end()) {
+                        // We already added this argument.
+                        auto msg = print_string("Parameter \"%.*s\" specified more than once.",
+                                                PRINT_SW(arg_identifier->identifier));
+                        print_error_context(msg, {state, arg_identifier->location});
+                        return false;
+                    }
+                    const auto* param = &generator->parameters[param_index];
+                    // Make absolutely sure that parameter points to the same symbol as the symbol that the identifier
+                    // was inferred to.
+                    symbol = state->find_symbol_flat(param->variable.contents, generator->scope_index);
+                    if (symbol == arg_identifier->symbol) {
+                        // We found a named param
+                        is_named_param = true;
+                        started_named_params = true;
+                        // Actual parameter is right hand side of named parameter assignment.
+                        // We don't need to alter the expression type to make sure that the evaluation of the expression
+                        // actually changes the paremeter, because the expression is an assignment expression.
+                        // When evaluated, it will assign a value to the parameter by itself.
+                        unique_arg = &assign->rhs;
+                        arg = unique_arg->get();
+                        if (param_index < required_params_count) ++supplied_required_params_count;
+                        supplied_params.push_back(param_index);
+                    }
+                }
+            }
+
+            if (!is_named_param) {
+                // Error reporting.
+                print_error_context("Invalid assignment expression in argument list.", {state, arg->location});
+                return false;
+            }
+        } else {
+            if (started_named_params) {
+                // Regular parameters cannot follow after named parameters.
+                print_error_context("Invalid regular parameter after named parameter.", {state, arg->location});
+                return false;
+            }
+            const auto* param = &generator->parameters[i];
+            symbol = state->find_symbol_flat(param->variable.contents, generator->scope_index);
+            if (i < required_params_count) ++supplied_required_params_count;
+            supplied_params.push_back(i);
+        }
         assert(symbol);
         any_t compile_time_value;
         if (!is_expression_convertible_to(state, arg, symbol->type, symbol->definition, &compile_time_value)) {
@@ -246,9 +323,17 @@ bool infer_expression_types_concrete_generator(process_state_t* state, expressio
             compile_time_exp->value = move(compile_time_value);
             compile_time_exp->definition = symbol->definition;
             compile_time_exp->value_category = exp_value_constant;
-            args->at(i) = move(compile_time_exp);
+            *unique_arg = move(compile_time_exp);
         }
     }
+
+    if (supplied_required_params_count < required_params_count) {
+        auto msg = print_string("Not enough parameters to generator \"%.*s\".", PRINT_SW(generator->name.contents));
+        print_error_context(msg, {state, exp->location});
+        return false;
+    }
+
+    state->set_scope(old_scope);
 
     return true;
 }
@@ -274,12 +359,13 @@ bool infer_expression_types_builtin_function(process_state_t* state, expression_
         return false;
     }
 
-    vector<typeid_info> argument_types;
+    vector<typeid_info_match> argument_types;
     argument_types.resize(args->size());
     for (size_t i = 0, count = argument_types.size(); i < count; ++i) {
-        argument_types[i] = args->at(i)->result_type;
+        auto arg = args->at(i).get();
+        argument_types[i] = {arg->result_type, arg->definition};
     }
-    auto args_result = func->are_function_arguments_valid(argument_types);
+    auto args_result = func->check(state->builtin, argument_types);
     if (!args_result.valid) {
         auto expected = to_string(args_result.expected);
         auto given = to_string(argument_types[args_result.invalid_index]);
@@ -293,7 +379,7 @@ bool infer_expression_types_builtin_function(process_state_t* state, expression_
     exp_value_category_enum value_category = exp_value_constant;
     for (size_t i = 0, count = args->size(); i < count; ++i) {
         auto arg = args->at(i).get();
-        if (arg->value_category == exp_value_runtime) {
+        if (arg->value_category != exp_value_constant) {
             value_category = exp_value_runtime;
             break;
         }
@@ -305,12 +391,15 @@ bool infer_expression_types_builtin_function(process_state_t* state, expression_
 }
 
 bool infer_expression_types_concrete_expression(process_state_t* state, expression_call_t* exp) {
-    if (!infer_expression_types_expression(state, exp->lhs.get())) return false;
-    for (auto&& arg : exp->arguments) {
-        if (!infer_expression_types_expression(state, arg.get())) return false;
+    auto lhs = exp->lhs.get();
+    if (!infer_expression_types_expression(state, lhs)) return false;
+    // infer_expression_types_concrete_generator will do inferring of the arguments itself.
+    if (!lhs->result_type.is(tid_generator, 0)) {
+        for (auto&& arg : exp->arguments) {
+            if (!infer_expression_types_expression(state, arg.get())) return false;
+        }
     }
 
-    auto lhs = exp->lhs.get();
     if (!lhs->result_type.is_callable()) {
         print_error_context("Expression does not result in a callable type.", {state, exp->location});
         return false;
@@ -368,20 +457,20 @@ bool infer_expression_types_concrete_expression(process_state_t* state, expressi
 
         exp_value_category_enum category = exp->lhs->value_category;
         vector<typeid_info_match> argument_types;
-        argument_types.resize(args.size());
-        for (size_t i = 0, count = argument_types.size(); i < count; ++i) {
+        argument_types.resize(args.size() + 1);
+        argument_types[0] = {lhs->result_type, lhs->definition};
+        for (size_t i = 0, count = args.size(); i < count; ++i) {
             auto arg = args[i].get();
-            argument_types[i] = {arg->result_type, arg->definition};
+            argument_types[i + 1] = {arg->result_type, arg->definition};
             if (arg->value_category != exp_value_constant) category = exp_value_runtime;
         }
-        auto method_args_result =
-            inferred_method.method->are_method_arguments_valid({lhs->result_type, lhs->definition}, argument_types);
+        auto method_args_result = inferred_method.method->check(state->builtin, argument_types);
         if (!method_args_result.valid) {
             auto expected = to_string(method_args_result.expected);
             auto given = to_string(argument_types[method_args_result.invalid_index]);
             auto msg = print_string("Cannot convert argument number %d from \"%s\" to \"%s\".",
                                     method_args_result.invalid_index, given.data, expected.data);
-            auto location = args[method_args_result.invalid_index]->location;
+            auto location = args[method_args_result.invalid_index - 1]->location;
             print_error_context(msg, {state, location});
             return false;
         }
@@ -488,134 +577,97 @@ bool get_common_field_type_from_sum(process_state_t* state, const type_sum* sum,
 
 bool infer_expression_types_concrete_expression(process_state_t* state, expression_dot_t* exp) {
     if (!infer_expression_types_expression(state, exp->lhs.get())) return false;
-    auto lhs = exp->lhs.get();
-    // Strings have dot operators, ints etc might get some too at some point.
-#if 0
-    if (lhs->type_definition_index < 0 && lhs->result_type.array_level <= 0) {
-        auto type = to_string(lhs->result_type);
-        auto msg = print_string("Expression with type \"%s\" does not have a dot operator.", type.data);
-        print_error_context(msg, state->file, lhs->location, lhs->location.length);
-        return false;
-    }
-#endif
 
+    // Error printing helper.
     auto print_field_error = [](const process_state_t* state, typeid_info type, string_token field) {
         auto match_type = to_string(type);
         auto msg = print_string("Type %s has no field \"%.*s\".", match_type.data, PRINT_SW(field.contents));
         print_error_context(msg, {state, field});
     };
 
+    auto lhs = exp->lhs.get();
     auto& fields = exp->fields;
     auto& inferred = exp->inferred;
     assert(inferred.empty());
 
-    if (!lhs->result_type.is(tid_pattern, 0) && !lhs->result_type.is(tid_sum, 0)) {
-        // Look for builtin properties or methods.
-        auto lhs_type = lhs->result_type;
-        size_t field_index = 0;
-        size_t fields_count = fields.size();
-        for (; field_index < fields_count; ++field_index) {
-            auto field = fields[field_index];
+    typeid_info_match lhs_type = {lhs->result_type, lhs->definition};
 
-            bool has_property = false;
-            for (const auto& property : builtin_properties) {
-                auto result_type = property.has_property(lhs_type, field.contents);
-                if (result_type.id != tid_undefined) {
-                    lhs_type = result_type;
-                    has_property = true;
-                    inferred.emplace_back(lhs_type, &property);
-                    break;
+    for (size_t field_index = 0, fields_count = fields.size(); field_index < fields_count; ++field_index) {
+        // The field we are trying to access of an instance of type 'lhs_type'.
+        auto field = fields[field_index];
+
+        if (lhs_type.array_level == 0 && (lhs_type.id == tid_pattern || lhs_type.id == tid_sum)) {
+            auto definition = lhs_type.definition;
+            assert(definition);
+            if (definition->type == td_pattern) {
+                auto pattern = &definition->pattern;
+                auto match_index = pattern->find_match_index_from_field_name(field.contents);
+                if (match_index < 0) {
+                    auto msg = print_string("Pattern \"%.*s\" does not have a field named \"%.*s\".",
+                                            PRINT_SW(definition->name.contents), PRINT_SW(field.contents));
+                    print_error_context(msg, {state, field});
+                    print_error_context("See pattern for context.", {state, definition->name});
+                    return false;
                 }
+                auto match = &pattern->match_entries[match_index];
+                if (match->type == mt_custom) {
+                    definition = match->match.custom;
+                    inferred.emplace_back(typeid_from_definition(*definition), definition);
+                    continue;
+                }
+
+                lhs_type = {match->match.type, definition};
+                inferred.emplace_back(match->match.type, definition);
+            } else if (definition->type == td_sum) {
+                common_sum_type common = {};
+                if (!get_common_field_type_from_sum(state, &definition->sum, definition->name, field, &common)) {
+                    return false;
+                }
+                if (common.definition) {
+                    definition = common.definition;
+                    inferred.emplace_back(typeid_from_definition(*definition), definition);
+                    continue;
+                }
+
+                lhs_type = {common.type, definition};
+                inferred.emplace_back(common.type, definition);
+            } else {
+                assert(0);
+                print_error_type(internal_error, {state, exp->location});
+                return false;
+            }
+        } else {
+            // Builtin property.
+            auto builtin = state->builtin.get_builtin_type(lhs_type);
+            if (!builtin) {
+                print_field_error(state, lhs_type, field);
+                return false;
             }
 
-            if (!has_property) break;
-        }
-
-        if (field_index == fields_count) {
-            exp->result_type = lhs_type;
-            assert(fields.size() == inferred.size());
-            return true;
-        }
-
-        // If field_index isn't the last entry of the dot expression, it cannot be a method.
-        if (field_index + 1 == fields_count) {
-            // Look for methods on current reference/property.
-            auto field_name = fields[field_index];
-            for (const auto& method : builtin_methods) {
-                if (method.method_name != field_name.contents) continue;
-                if (method.has_method({lhs_type, nullptr})) {
+            // If field_index isn't the last entry of the dot expression, it cannot be a method.
+            if (field_index + 1 == fields_count) {
+                // Look for methods on current reference/property.
+                if (auto method = builtin->get_method(field.contents)) {
                     exp->result_type = {tid_method, 0};
-                    inferred.emplace_back(exp->result_type, &method);
+                    inferred.emplace_back(exp->result_type, method);
                     assert(fields.size() == inferred.size());
                     return true;
                 }
             }
-        }
 
-        print_field_error(state, lhs_type, fields[field_index]);
-        return false;
-    }
-
-    assert(lhs->result_type.is(tid_pattern, 0) || lhs->result_type.is(tid_sum, 0));
-
-    auto definition = lhs->definition;
-    assert(definition);
-    assert(definition->finalized);
-    assert(definition->type == td_pattern || definition->type == td_sum);
-
-    for (size_t i = 0, count = fields.size(); i < count; ++i) {
-        auto field = fields[i];
-
-        assert(definition);
-        assert(definition->finalized);
-
-        if (definition->type == td_pattern) {
-            auto pattern = &definition->pattern;
-            auto match_index = pattern->find_match_index_from_field_name(field.contents);
-            if (match_index < 0) {
-                auto msg = print_string("Pattern \"%.*s\" does not have a field named \"%.*s\".",
-                                        PRINT_SW(definition->name.contents), PRINT_SW(field.contents));
-                print_error_context(msg, {state, field});
-                print_error_context("See pattern for context.", {state, definition->name});
+            auto property = builtin->get_property(field.contents);
+            if (!property) {
+                print_field_error(state, lhs_type, field);
                 return false;
             }
-            auto match = &pattern->match_entries[match_index];
-            if (match->type == mt_custom) {
-                definition = match->match.custom;
-                inferred.emplace_back(typeid_from_definition(*definition), definition);
-                continue;
-            } else if (i + 1 < count) {
-                print_field_error(state, match->match.type, fields[i + 1]);
-                return false;
-            }
-
-            exp->result_type = match->match.type;
-            inferred.emplace_back(match->match.type, definition);
-            assert(exp->result_type.id != tid_undefined);
-            assert(i + 1 == count);
-        } else if (definition->type == td_sum) {
-            common_sum_type common = {};
-            if (!get_common_field_type_from_sum(state, &definition->sum, definition->name, field, &common)) {
-                return false;
-            }
-            if (common.definition) {
-                definition = common.definition;
-                inferred.emplace_back(typeid_from_definition(*definition), definition);
-                continue;
-            }
-            if (i + 1 < count) {
-                print_field_error(state, common.type, fields[i + 1]);
-                return false;
-            }
-
-            exp->result_type = common.type;
-            inferred.emplace_back(common.type, definition);
-            assert(exp->result_type.id != tid_undefined);
-            assert(i + 1 == count);
-        } else {
-            assert(0);
+            lhs_type = property->result_type;
+            inferred.emplace_back(lhs_type, property);
         }
     }
+
+    exp->result_type = lhs_type;
+    assert(fields.size() == inferred.size());
+    assert(exp->result_type.id != tid_undefined);
     return true;
 }
 
@@ -623,6 +675,7 @@ bool infer_expression_types_concrete_expression(process_state_t*, expression_com
     // Compile time evaluated expressions should already be inferred, since otherwise they couldn't be generated in the
     // first place.
     assert(exp->result_type.id != tid_undefined);
+    MAYBE_UNUSED(exp);
     return true;
 }
 
@@ -775,7 +828,7 @@ bool infer_expression_types_segment(process_state_t* state, formatted_segment_t*
                     if (!infer_expression_types_block(state, &if_stmt->else_block)) return false;
                 }
                 state->set_scope(prev_scope);
-                break;
+                continue;
             }
             case stmt_for: {
                 auto for_stmt = &statement.for_statement;
@@ -783,12 +836,20 @@ bool infer_expression_types_segment(process_state_t* state, formatted_segment_t*
 
                 auto container = for_stmt->container_expression.get();
                 if (!infer_expression_types_expression(state, container)) return false;
+                // Int ranges are iteratable by default.
+                if (!container->result_type.is(tid_int_range, 0)) {
+                    auto container_type = state->builtin.get_builtin_type(container->result_type);
+                    if (!container_type || !container_type->is_iteratable) {
+                        print_error_context("Expression is not iterateble.", {state, container->location});
+                        return false;
+                    }
+                }
                 auto symbol = state->find_symbol_flat(for_stmt->variable, for_stmt->scope_index);
                 assert(symbol);
                 if (symbol->type.id == tid_undefined) {
                     symbol->type = get_dereferenced_type(container->result_type);
                     if (symbol->type.id == tid_undefined) {
-                        print_error_context("Expression is not an array.", {state, container->location});
+                        print_error_context("Expression is not an iterateble.", {state, container->location});
                         return false;
                     }
                     if (container->definition) symbol->definition = container->definition;
@@ -796,29 +857,30 @@ bool infer_expression_types_segment(process_state_t* state, formatted_segment_t*
                 symbol->declaration_inferred = true;
                 if (!infer_expression_types_block(state, &for_stmt->body)) return false;
                 state->set_scope(prev_scope);
-                break;
+                continue;
             }
             case stmt_expression: {
                 if (!infer_expression_types_expression(state, statement.formatted.expression.get())) return false;
-                break;
+                continue;
             }
             case stmt_declaration: {
                 auto declaration = &statement.declaration;
                 if (!infer_declaration_types(state, declaration)) return false;
-                break;
+                continue;
             }
-            case stmt_none:
             case stmt_literal:
             case stmt_comma:
             case stmt_break:
-            case stmt_continue: {
+            case stmt_continue:
+            case stmt_return: {
+                continue;
+            }
+            case stmt_none: {
                 break;
             }
-            default: {
-                assert(0 && "Unhandled statement type.");
-                return false;
-            }
         }
+        assert(0 && "Unhandled statement type.");
+        return false;
     }
     return true;
 }
@@ -833,12 +895,12 @@ bool infer_expression_types_block(process_state_t* state, literal_block_t* block
     return true;
 }
 
-bool infer_expression_types(process_state_t state) {
-    if (!infer_expression_types_segment(&state, &state.data->toplevel_segment)) return false;
-    for (auto& unique_generator : state.data->generators) {
+bool infer_expression_types(process_state_t* state) {
+    if (!infer_expression_types_segment(state, &state->data->toplevel_segment)) return false;
+    for (auto& unique_generator : state->data->generators) {
         auto generator = unique_generator.get();
-        state.set_scope(generator->scope_index);
-        if (!infer_expression_types_block(&state, &generator->body)) return false;
+        state->set_scope(generator->scope_index);
+        if (!infer_expression_types_block(state, &generator->body)) return false;
     }
     return true;
 }

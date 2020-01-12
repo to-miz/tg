@@ -17,6 +17,30 @@ struct range_t {
 
 struct builtin_function_t;
 struct generator_t;
+struct custom_base_t;
+
+struct custom_iterator_t {
+    virtual ~custom_iterator_t() = 0 {};
+    virtual any_t next() = 0;
+};
+
+struct custom_base_t {
+    virtual ~custom_base_t() = 0 {};
+
+    virtual custom_base_t* clone() const = 0;
+    virtual typeid_info type() const = 0;
+
+    // Optional: Should return -1 on error, required size if buffer_len is not enough and written amount on success.
+    virtual int print_to_string(char* buffer, size_t buffer_len, const tml::PrintFormat& initial) const {
+        MAYBE_UNUSED(buffer);
+        MAYBE_UNUSED(buffer_len);
+        MAYBE_UNUSED(initial);
+        return -1;
+    };
+
+    // Optional: Only used when custom type is iterateble.
+    virtual std::unique_ptr<custom_iterator_t> to_iterateble() const { return {}; }
+};
 
 struct any_t {
     typeid_info type = {tid_undefined, 0};
@@ -274,6 +298,17 @@ struct any_t {
         return (const generator_t*)data;
     };
 
+    custom_base_t* as_custom() {
+        assert(data);
+        assert(is_custom_type(type));
+        return (custom_base_t*)data;
+    }
+    const custom_base_t* as_custom() const {
+        assert(data);
+        assert(is_custom_type(type));
+        return (const custom_base_t*)data;
+    }
+
     bool is_array() const { return type.array_level > 0; };
 
     matched_pattern_instance_t& to_pattern() {
@@ -345,6 +380,9 @@ struct any_t {
                     break;
                 }
                 default: {
+                    if (is_custom_type(type)) {
+                        if (data) delete as_custom();
+                    }
                     break;
                 }
             }
@@ -353,7 +391,10 @@ struct any_t {
         data = nullptr;
     }
     void copy_from(const any_t& other) {
+        assert(!data);
+
         auto other_ptr = other.dereference();
+        assert(other_ptr);
         type = other_ptr->type;
         if (other_ptr->type.array_level > 0) {
             data = new vector<any_t>(other_ptr->as_array());
@@ -369,7 +410,11 @@ struct any_t {
                     break;
                 }
                 default: {
-                    memcpy((void*)this, other_ptr, sizeof(any_t));
+                    if (is_custom_type(type)) {
+                        data = other_ptr->as_custom()->clone();
+                    } else {
+                        memcpy((void*)this, other_ptr, sizeof(any_t));
+                    }
                     break;
                 }
             }
@@ -377,7 +422,7 @@ struct any_t {
     }
 };
 
-size_t snprint(char* buffer, size_t buffer_len, const PrintFormat& initial, const any_t& value) {
+int tml::snprint(char* buffer, size_t buffer_len, const tml::PrintFormat& initial, const any_t& value) {
     auto value_ptr = value.dereference();
     auto type = value_ptr->type;
     char* p = buffer;
@@ -392,10 +437,13 @@ size_t snprint(char* buffer, size_t buffer_len, const PrintFormat& initial, cons
                 if (p < last) *p++ = ' ';
             }
             not_first = true;
-            p += snprint(p, (size_t)(last - p), initial, inner);
+            auto remaining = (size_t)(last - p);
+            auto print_result = snprint(p, remaining, initial, inner);
+            if (print_result < 0 || (size_t)print_result >= remaining) return -1;
+            p += print_result;
         }
         if (p < last) *p++ = ']';
-        return (size_t)(p - buffer);
+        return (int)(p - buffer);
     }
 
     switch (type.id) {
@@ -417,15 +465,20 @@ size_t snprint(char* buffer, size_t buffer_len, const PrintFormat& initial, cons
             for (auto& inner : match.field_values) {
                 if (not_first && p < last) *p++ = ' ';
                 not_first = true;
-                p += snprint(p, (size_t)(last - p), initial, inner);
+                auto print_result = snprint(p, (size_t)(last - p), initial, inner);
+                if (print_result < 0) return -1;
+                p += print_result;
             }
-            return (size_t)(p - buffer);
+            return (int)(p - buffer);
         }
         case tid_int_range: {
             auto range = value_ptr->as_range();
             return snprint(buffer, buffer_len, "range({}, {})", initial, range.min, range.max);
         }
         default: {
+            if (is_custom_type(type)) {
+                return value_ptr->as_custom()->print_to_string(buffer, buffer_len, initial);
+            }
             return 0;
         }
     }
@@ -465,6 +518,7 @@ any_t make_any(string_view str) {
     result.data = data;
     return result;
 }
+any_t make_any(const char* str) { return make_any(string_view{str}); }
 any_t make_any_unescaped(string_view str) {
     auto data = new string(to_unescaped_string(str));
 
@@ -513,6 +567,15 @@ any_t make_any(const generator_t* generator) {
     return result;
 }
 
+any_t make_any_custom(custom_base_t* custom) {
+    assert(custom);
+    any_t result = {};
+    result.type = custom->type();
+    assert(is_custom_type(result.type));
+    result.data = custom;
+    return result;
+}
+
 any_t make_any_void() {
     any_t result = {};
     result.type = {tid_void, 0};
@@ -523,6 +586,7 @@ any_t make_any_ref(any_t* ref) {
     assert(ref);
     while (ref->type.is(tid_reference, 0)) {
         ref = ref->ref;
+        assert(ref);
     }
     any_t result = {};
     result.type = {tid_reference, 0};

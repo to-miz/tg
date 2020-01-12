@@ -36,9 +36,9 @@ enum expression_type_enum : int8_t {
 
     exp_assign,
 
-    // This expression type will only be generated when inferring types, not while parsing expressions.
-    // Therefore there is no parse_compile_time_evaluated_expression function.
-    // This expression replaces an expression with its evaluated compile time value.
+    // These expression types will only be generated when inferring types, not while parsing expressions.
+    // Therefore there is no parse_compile_time_evaluated_expression etc function.
+    // These expressions replace an expression their inferred versions.
     exp_compile_time_evaluated,
 };
 
@@ -86,7 +86,7 @@ struct expression_two_t : expression_t {
 struct expression_call_t : expression_t {
     unique_expression_t lhs;
     vector<unique_expression_t> arguments;
-    const builtin_method_t* method = nullptr;
+    const builtin_function_t* method = nullptr;
 };
 
 struct expression_compile_time_evaluated_t : expression_t {
@@ -102,7 +102,7 @@ struct inferred_field_t {
         int none = 0;
         const match_type_definition_t* match;
         const builtin_property_t* property;
-        const builtin_method_t* method;
+        const builtin_function_t* method;
     };
 
     inferred_field_t() = default;
@@ -111,7 +111,7 @@ struct inferred_field_t {
         : field_type(ft_match), type(type), match(match) {}
     inferred_field_t(typeid_info type, const builtin_property_t* property)
         : field_type(ft_property), type(type), property(property) {}
-    inferred_field_t(typeid_info type, const builtin_method_t* method)
+    inferred_field_t(typeid_info type, const builtin_function_t* method)
         : field_type(ft_method), type(type), method(method) {}
 };
 

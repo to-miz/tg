@@ -40,17 +40,24 @@ unicode_gen dir tools/unicode_gen/data --prefix=tmu_ --assert=TM_ASSERT
 handle_invalid_codepoints,prune_stage_one,prune_stage_two
 --output=tm_unicode_custom_ucd.c --header=tm_unicode_custom_ucd.h
 */
-#include <tm/tm_unicode_custom_ucd.h>
-#include <tm/tm_unicode_custom_ucd.c>
+#include "tm_unicode_custom_ucd.h"
+#include "tm_unicode_custom_ucd.c"
 #include <tm/tm_unicode.h>
 
-struct PrintFormat;
 struct any_t;
-size_t snprint(char* buffer, size_t buffer_len, const PrintFormat& initial, const any_t& value);
+namespace tml {
+struct PrintFormat;
+int snprint(char* buffer, size_t buffer_len, const PrintFormat& initial, const any_t& value);
+}  // namespace tml
 
 #define TM_PRINT_IMPLEMENTATION
 #define TMP_INT_BACKEND_TM_CONVERSION
 #define TMP_FLOAT_BACKEND_TM_CONVERSION
 #define TMP_NO_INCLUDE_TM_CONVERSION
 #define TMP_CUSTOM_PRINTING
+#define TMP_HAS_CONSTEXPR_IF
 #include <tm/tm_print.h>
+using namespace tml;
+
+#define TM_JSON_IMPLEMENTATION
+#include <tm/tm_json.h>

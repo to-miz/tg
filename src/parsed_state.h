@@ -11,6 +11,16 @@ struct parsed_state_t {
     formatted_segment_t toplevel_segment;
     int toplevel_stack_size = 0;
 
+    parsed_state_t() {
+        // Add builtin global symbols.
+
+        // Global argv string array.
+        auto argv_symbol =
+            add_symbol({"argv", {}}, /*type=*/{tid_string, 1}, /*symbol_table_index=*/0, /*type_name=*/{});
+        argv_symbol->stack_value_index = toplevel_stack_size++;
+        argv_symbol->declaration_inferred = true;
+    }
+
     match_type_definition_t* add_match_type_definition(string_token name, match_type_definition_enum type) {
         auto& unique_added = match_type_definitions.emplace_back(make_monotonic_unique<match_type_definition_t>(type));
         auto added = unique_added.get();
@@ -85,6 +95,7 @@ struct parsed_state_t {
         return nullptr;
     }
 };
+
 
 struct parsing_state_t {
     parsed_state_t* data = nullptr;

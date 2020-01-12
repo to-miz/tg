@@ -194,8 +194,7 @@ void print_symbol_table(const parsed_state_t& state, int index = 0, int indentat
         for (auto i = 0; i < indentation; ++i) {
             printf("  ");
         }
-        assert(symbol.type.id < tid_count);
-        printf("%.*s: %s", PRINT_SW(symbol.name.contents), typeid_names[symbol.type.id]);
+        printf("%.*s: %s", PRINT_SW(symbol.name.contents), to_string(symbol.type.id));
         for (int i = 0, count = symbol.type.array_level; i < count; ++i) {
             printf("[]");
         }

@@ -2,6 +2,8 @@ struct cli_options {
     vector<const char*> source_files;
     const char* output_file;
     bool valid;
+
+    tmcli_args remaining;
 };
 
 enum { cli_option_output_file };
@@ -35,6 +37,8 @@ cli_options parse_cli(char const* const* args, int args_count) {
         print(stderr, "{}: No source files specified.\n", args[0]);
         result.valid = false;
     }
+
+    if (result.valid) result.remaining = tmcli_get_remaining_args(&cli_parser);
     return result;
 }
 
@@ -85,6 +89,13 @@ int main(int internal_argc, char const* internal_argv[])
 {
     stderr_flush_guard_t stderr_flush_guard;
 
+#if defined(_MSC_VER) && defined(_WIN32) && defined(_DEBUG)
+    /* Set up leak detection. */
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_DEBUG);
+    /* _CrtSetBreakAlloc(xxx); */ /* Used to break on a specific allocation in the debugger. */
+#endif
+
 #ifdef _WIN32
     // Get Utf-8 command line using tm_unicode.
     auto utf8_cl_result = tmu_utf8_command_line_from_utf16_managed(internal_argv, internal_argc);
@@ -102,13 +113,15 @@ int main(int internal_argc, char const* internal_argv[])
     auto cli_options = parse_cli(args, args_count);
     if (!cli_options.valid) return -1;
 
+    assert(cli_options.source_files.size() > 0);
+
     parsed_state_t parsed = {};
     for (auto& source_file : cli_options.source_files) {
         if (!parse_file(&parsed, source_file)) return -1;
     }
 
     process_state_t process_state = {&parsed};
-    if (!process_parsed_data(process_state)) return -1;
+    if (!process_parsed_data(&process_state)) return -1;
 
     output_stream_t output_stream = {stdout, "stdout", app};
     if (cli_options.output_file) {
@@ -128,7 +141,18 @@ int main(int internal_argc, char const* internal_argv[])
 
     process_state.output.stream = output_stream.stream;
 
-    invoke_toplevel(&process_state);
+    // Prepare argv builtin global variable.
+    any_t builtin_argv;
+    {
+        vector<any_t> argv_array;
+        argv_array.push_back(make_any(cli_options.source_files[0]));
+        for (int i = 0; i < cli_options.remaining.argc; ++i) {
+            argv_array.push_back(make_any(cli_options.remaining.argv[i]));
+        }
+        builtin_argv = make_any(move(argv_array), {tid_string, 1});
+    }
+
+    invoke_toplevel(&process_state, move(builtin_argv));
 
     if (!output_stream.close()) return -1;
     return 0;

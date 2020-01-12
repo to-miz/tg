@@ -208,12 +208,26 @@ parse_result parse_identifier_expression(tokenizer_t* tokenizer, unique_expressi
     return pr_no_match;
 }
 
-parse_result parse_expression_list(tokenizer_t* tokenizer, vector<unique_expression_t>* out) {
+parse_result parse_expression_list(tokenizer_t* tokenizer, token_type_enum delim_token,
+                                   vector<unique_expression_t>* out) {
     for (;;) {
         unique_expression_t arg;
         require_success(parse_expression(tokenizer, &arg));
         out->emplace_back(move(arg));
         if (!consume_token_if(tokenizer, tok_comma)) break;
+        // Allow trailing commas.
+        if (peek_token(tokenizer).type == delim_token) break;
+    }
+    return pr_success;
+}
+parse_result parse_argument_list(tokenizer_t* tokenizer, vector<unique_expression_t>* out) {
+    for (;;) {
+        unique_expression_t arg;
+        require_success(parse_assign_expression(tokenizer, &arg));
+        out->emplace_back(move(arg));
+        if (!consume_token_if(tokenizer, tok_comma)) break;
+        // Allow trailing commas.
+        if (peek_token(tokenizer).type == tok_paren_close) break;
     }
     return pr_success;
 }
@@ -293,7 +307,7 @@ parse_result parse_call_expression(tokenizer_t* tokenizer, unique_expression_t* 
             ast_ptr->lhs = move(last);
             if (peek_token(tokenizer).type != tok_paren_close) {
                 // Parse arguments
-                require_success(parse_expression_list(tokenizer, &ast_ptr->arguments));
+                require_success(parse_argument_list(tokenizer, &ast_ptr->arguments));
             }
 
             if (!require_token_type(tokenizer, next_token(tokenizer), tok_paren_close, "')' expected.")) {
@@ -354,7 +368,7 @@ parse_result parse_primary_expression(tokenizer_t* tokenizer, unique_expression_
         next_token(tokenizer);
         auto ast = make_expression<exp_array>(token);
         if (!consume_token_if(tokenizer, tok_square_close)) {
-            require_success(parse_expression_list(tokenizer, &ast->entries));
+            require_success(parse_expression_list(tokenizer, tok_square_close, &ast->entries));
             if (!require_token_type(tokenizer, next_token(tokenizer), tok_square_close, "']' expected.")) {
                 return pr_error;
             }
