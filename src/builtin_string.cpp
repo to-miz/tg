@@ -352,6 +352,21 @@ any_t string_kebab_case_call(array_view<any_t> arguments) {
     return make_any(result);
 }
 
+builtin_arguments_valid_result_t string_check_starts_with(const builtin_state_t& /*state*/,
+                                                          array_view<const typeid_info_match> arguments) {
+    assert(arguments[0].is(tid_string, 0));
+    MAYBE_UNUSED(arguments);
+    builtin_arguments_valid_result_t result = {{tid_string, 0, nullptr}, {tid_bool, 0, nullptr}};
+    for (size_t i = 1; i < arguments.size(); ++i) {
+        if (!arguments[i].is(tid_string, 0)) {
+            result.valid = false;
+            result.invalid_index = (int)i;
+            break;
+        }
+    }
+    return result;
+}
+
 any_t string_call_starts_with(array_view<any_t> arguments) {
     auto& lhs = arguments[0].dereference()->as_string();
     auto& rhs = arguments[1].dereference()->as_string();
@@ -432,7 +447,7 @@ void init_builtin_string(builtin_type_t* type) {
         {"trim", 0, 0, string_no_arguments_method, string_call_trim},
         {"trim_left", 0, 0, string_no_arguments_method, string_call_trim_left},
         {"trim_right", 0, 0, string_no_arguments_method, string_call_trim_right},
-        {"starts_with", 1, 1, string_are_append_arguments_valid, string_call_starts_with},
+        {"starts_with", 1, 1, string_check_starts_with, string_call_starts_with},
         {"substr", 1, 2, string_are_arguments_int, string_call_substr},
         {"find", 1, 1, string_find_args, string_call_find},
 
