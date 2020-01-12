@@ -96,7 +96,7 @@ any_t evaluate_expression_concrete(process_state_t* state, const expression_iden
     if (!symbol) throw tg_exeption("Unknown identifier.", exp->location);
 
     assert(symbol->stack_value_index >= 0);
-    auto stack = (symbol->stack_index >= 0) ? &state->value_stack[symbol->stack_index] : &state->value_stack.back();
+    auto stack = &state->value_stack.back();
     auto value = stack->values[symbol->stack_value_index].dereference();
 
     assert(value->type.is(symbol->type.id, symbol->type.array_level) ||

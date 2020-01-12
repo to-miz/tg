@@ -382,7 +382,6 @@ parse_result parse_declaration(tokenizer_t* tokenizer, parsing_state_t* parsing,
 
     assert(symbol);
     // Add variable to stack and bind symbol to stack entry.
-    if (parsing->current_symbol_table == 0) symbol->stack_index = 0;
     symbol->stack_value_index = parsing->current_stack_size++;
 
     return pr_success;
@@ -478,7 +477,6 @@ parse_result parse_for_statement(tokenizer_t* tokenizer, parsing_state_t* parsin
     auto symbol = parsing->add_symbol(variable, type);
 
     // Add variable to stack.
-    if (parsing->current_symbol_table == 0) symbol->stack_index = 0;
     symbol->stack_value_index = parsing->current_stack_size++;
 
     --parsing->nested_for_statements;

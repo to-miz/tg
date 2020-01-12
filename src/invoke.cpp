@@ -298,11 +298,8 @@ void evaluate_call(process_state_t* state, const generator_t& generator, const v
     assert(arguments.size() <= (size_t)generator.parameters.size());
     assert(generator.parameters.size() >= (size_t)generator.required_parameters);
 
-    auto scope_index = generator.scope_index;
-    auto prev_scope_index = state->set_scope(scope_index);
-
+    value_storage current_stack;
     // Prepare arguments and set symbols to point to these values.
-    auto& current_stack = state->value_stack.emplace_back();
     assert(generator.stack_size >= 0);
     if (generator.stack_size > 0) current_stack.values.resize(generator.stack_size);
 
@@ -331,6 +328,9 @@ void evaluate_call(process_state_t* state, const generator_t& generator, const v
         evaluated.emplace_back(evaluate_expression_throws(state, arg.get()));
     }
 
+    auto scope_index = generator.scope_index;
+    auto prev_scope_index = state->set_scope(scope_index);
+
     for (int i = 0; i < count; ++i) {
         auto& param = generator.parameters[i];
         auto symbol = state->find_symbol_flat(param.variable.contents, scope_index);
@@ -357,6 +357,7 @@ void evaluate_call(process_state_t* state, const generator_t& generator, const v
     }
 
     // Actual invocation and evaluation happens in evaluate_literal_body.
+    state->value_stack.push_back(std::move(current_stack));
     evaluate_literal_body(state, generator.body);
     if (state->output.whitespace.preceding_newlines) fprintf(state->output.stream, "\n");
 
