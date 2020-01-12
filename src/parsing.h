@@ -392,6 +392,7 @@ bool parse_generator_parameters(tokenizer_t* tokenizer, parsing_state_t* parsing
     do {
         statement_t dummy_statement = {};
         auto declaration_result = parse_declaration(tokenizer, parsing, &dummy_statement);
+        if (declaration_result == pr_no_match) return true;
         if (declaration_result != pr_success) return false;
 
         assert(dummy_statement.type == stmt_declaration);
