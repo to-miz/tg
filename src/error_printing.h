@@ -60,11 +60,11 @@ void print_error_context_impl(string_view message, file_data file, stream_loc_t 
     string_view fn = (file.filename.size()) ? (file.filename) : ("Error");
     const char* dots = cropped ? "..." : "";
 
-    fprintf(stderr, "%.*s(%d:%d): %.*s\n %.*s%s\n %.*s^%.*s\n", (int)fn.size(), fn.data(), location.line + 1,
-            location.column + 1, (int)message.size(), message.data(), (int)(line_end - line_start), line_start, dots,
-            spaces_to_print, spaces, length, tildes);
+    tmu_fprintf(stderr, "%.*s(%d:%d): %.*s\n %.*s%s\n %.*s^%.*s\n", (int)fn.size(), fn.data(), location.line + 1,
+                location.column + 1, (int)message.size(), message.data(), (int)(line_end - line_start), line_start,
+                dots, spaces_to_print, spaces, length, tildes);
 #ifdef _DEBUG
-    fprintf(stderr, "DEBUG: Error location: %s:%d.\n", debug_error_file, debug_error_line);
+    tmu_fprintf(stderr, "DEBUG: Error location: %s:%d.\n", debug_error_file, debug_error_line);
 #endif
 }
 void print_error_context_impl(string_view message, file_data file, token_t token) {
@@ -135,10 +135,10 @@ void print_error_context_impl(string_view message, source_file_location source) 
 
 void print_error_impl(string_view message, file_data file, stream_loc_t location) {
     string_view fn = (file.filename.size()) ? (file.filename) : ("Error");
-    fprintf(stderr, "%.*s(%d:%d): %.*s\n", (int)fn.size(), fn.data(), location.line + 1, location.column + 1,
-            (int)message.size(), message.data());
+    tmu_fprintf(stderr, "%.*s(%d:%d): %.*s\n", (int)fn.size(), fn.data(), location.line + 1, location.column + 1,
+                (int)message.size(), message.data());
 #ifdef _DEBUG
-    fprintf(stderr, "DEBUG: Error location: %s:%d.\n", debug_error_file, debug_error_line);
+    tmu_fprintf(stderr, "DEBUG: Error location: %s:%d.\n", debug_error_file, debug_error_line);
 #endif
 }
 void print_error_impl(string_view message, const tokenizer_t* tokenizer, stream_loc_t location) {

@@ -1,42 +1,41 @@
 // 16 * 4 spaces, 16 indentations using space.
-static char const* const indent_spaces_string = "                                                                ";
+static const std::string_view indent_spaces_string = "                                                                ";
 
-void output_newlines(FILE* stream, int newlines_count) {
+void output_newlines(std::string& stream, int newlines_count) {
     // Output multiple newlines at once.
     assert(newlines_count >= 0);
-    const char* newlines = "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";  // 16 newlines.
+    std::string_view newlines = "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";  // 16 newlines.
     while (newlines_count >= 16) {
-        fwrite(newlines, sizeof(char), 16, stream);
+        stream += newlines;
         newlines_count -= 16;
     }
-    if (newlines_count > 0) fwrite(newlines, sizeof(char), newlines_count, stream);
+    if (newlines_count > 0) stream += newlines.substr(0, (size_t)newlines_count);
 }
-void output_indentation(FILE* stream, int indentation) {
+void output_indentation(std::string& stream, int indentation) {
     while (indentation >= 16) {
-        fwrite(indent_spaces_string, sizeof(char), 16 * 4, stream);
+        stream += indent_spaces_string;
         indentation -= 16;
     }
-    if (indentation > 0) fwrite(indent_spaces_string, sizeof(char), indentation * 4, stream);
+    if (indentation > 0) stream += indent_spaces_string.substr(0, (size_t)indentation * 4);
 }
-void output_spaces(FILE* stream, int spaces) {
-    while (spaces >= 16) {
-        fwrite(indent_spaces_string, sizeof(char), 16, stream);
-        spaces -= 16;
+void output_spaces(std::string& stream, int spaces) {
+    while (spaces >= 64) {
+        stream += indent_spaces_string;
+        spaces -= 64;
     }
-    if (spaces > 0) fwrite(indent_spaces_string, sizeof(char), spaces, stream);
+    if (spaces > 0) stream += indent_spaces_string.substr(0, (size_t)spaces);
 }
 
 void output_preceding_newlines(output_context* out) {
     auto ws = &out->whitespace;
-    auto stream = out->stream;
     if (ws->preceding_newlines > 0) {
-        output_newlines(stream, ws->preceding_newlines);
+        output_newlines(out->stream, ws->preceding_newlines);
         ws->preceding_newlines = 0;
     }
 }
 void output_preceding(output_context* out) {
     auto ws = &out->whitespace;
-    auto stream = out->stream;
+    auto& stream = out->stream;
     if (ws->preceding_newlines > 0) {
         output_newlines(stream, ws->preceding_newlines);
         ws->preceding_newlines = 0;
@@ -54,11 +53,11 @@ void output_preceding(output_context* out) {
 void output_string(output_context* out, string_view str, int preceding_spaces) {
     output_preceding(out);
     if (preceding_spaces > 0) output_spaces(out->stream, preceding_spaces);
-    fprintf(out->stream, "%.*s", PRINT_SW(str));
+    out->stream.insert(out->stream.end(), str.begin(), str.end());
 }
 
 void output_any(output_context* out, const any_t& value_ref, int preceding_spaces, const PrintFormat& format) {
-    auto stream = out->stream;
+    auto& stream = out->stream;
 
     auto value = value_ref.dereference();
     auto type = value->get_type_info();
@@ -292,7 +291,6 @@ eval_result evaluate_literal_body(process_state_t* state, const literal_block_t&
 
 void evaluate_call(process_state_t* state, const generator_t& generator, const vector<unique_expression_t>& arguments) {
     assert(state);
-    assert(state->output.stream);
     assert(generator.required_parameters >= 0);
     assert(arguments.size() >= (size_t)generator.required_parameters);
     assert(arguments.size() <= (size_t)generator.parameters.size());
@@ -400,7 +398,7 @@ void evaluate_call(process_state_t* state, const generator_t& generator, const v
     state->value_stack.push_back(std::move(current_stack));
     auto prev_scope_index = state->set_scope(scope_index);
     evaluate_literal_body(state, generator.body);
-    if (state->output.whitespace.preceding_newlines) fprintf(state->output.stream, "\n");
+    if (state->output.whitespace.preceding_newlines) state->output.stream += '\n';
 
     state->value_stack.pop_back();
     state->set_scope(prev_scope_index);

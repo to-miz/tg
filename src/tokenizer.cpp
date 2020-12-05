@@ -129,20 +129,18 @@ token_t next_token(tokenizer_t* tokenizer) {
             result = dual_op(tokenizer, tok_bitwise_or, '|', tok_or);
             break;
         }
+        case '\'':
         case '"': {
             // string
+            auto quot = *tokenizer->current;
             auto start_position = tokenizer->location;
             increment(tokenizer);
             result.location = tokenizer->location;
-            const char* next = tmsu_find_char_unescaped(tokenizer->current, '"', '\\');
-            if (!*next) {
-                print_error_context("End of file reached before encountering matching '\"'.", tokenizer, start_position,
-                                    (int)(next - tokenizer->current));
-                break;
-            }
-            if (tmsu_find_char_n(tokenizer->current, next, '\n') != next) {
-                print_error_context("End of line reached before encountering matching '\"'.", tokenizer, start_position,
-                                    (int)(next - tokenizer->current));
+            const char* next = tmsu_find_char_unescaped(tokenizer->current, quot, '\\');
+            if (!*next || tmsu_find_char_n(tokenizer->current, next, '\n') != next) {
+                auto message = "End of file reached before encountering matching '\"'.";
+                if (quot == '\'') message = "End of file reached before encountering matching \"'\".";
+                print_error_context(message, tokenizer, start_position, (int)(next - tokenizer->current));
                 break;
             }
             result.type = tok_string;
@@ -160,11 +158,11 @@ token_t next_token(tokenizer_t* tokenizer) {
                 result.type = tok_identifier;
                 result.contents = {tokenizer->current, next};
                 advance_column(tokenizer, next);
-            } else if (isdigit(*next)) {
+            } else if (isdigit((uint8_t)*next)) {
                 // constant
                 do {
                     ++next;
-                } while (isdigit(*next));
+                } while (isdigit((uint8_t)*next));
                 result.type = tok_constant;
                 result.contents = {tokenizer->current, next};
                 advance_column(tokenizer, next);

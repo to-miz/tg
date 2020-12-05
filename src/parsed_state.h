@@ -6,6 +6,7 @@ struct parsed_state_t {
     vector_of_monotonic<generator_t> generators;
     vector<symbol_table_t> symbol_tables = vector<symbol_table_t>(1);
     vector<file_data> source_files;
+    bool verbose = false;
     bool valid = false;
 
     formatted_segment_t toplevel_segment;
@@ -96,12 +97,17 @@ struct parsed_state_t {
     }
 };
 
-
 struct parsing_state_t {
     parsed_state_t* data = nullptr;
     int current_symbol_table = 0;
     int nested_for_statements = 0;
     int current_stack_size = 0;
+    bool verbose = false;
+
+    parsing_state_t(parsed_state_t* data) : data(data) {
+        assert(data);
+        verbose = data->verbose;
+    }
 
     // Used for skipping newlines after literal blocks, so that a single '}' on an empty line doesn't contribute a
     // newline to the output. See parse_literal_block where this gets set.

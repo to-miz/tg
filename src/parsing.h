@@ -196,10 +196,10 @@ parse_result parse_pattern_type_definition(tokenizer_t* tokenizer, parsing_state
             advance(tokenizer, next);
 
             // Add a match entry for each whitespace seperated group of chars.
-            auto whitespace_seperator = tmsu_make_tokenizer_n(current, next);
-            string_view word;
-            while (tmsu_next_token_n(&whitespace_seperator, WHITESPACE, &word)) {
-                string raw = {word.begin(), word.end()};
+            auto whitespace_seperator = tmsu_view_n(current, next);
+            tmsu_view_t word;
+            while (tmsu_next_token_skip_empty_v(&whitespace_seperator, WHITESPACE, &word)) {
+                string raw = {word.first, word.last};
                 // Remove escape chars from string.
                 for (auto it = raw.begin();;) {
                     auto start = &(*it);
@@ -763,7 +763,8 @@ void determine_whether_to_skip_next_newline(tokenizer_t* tokenizer, parsing_stat
     // line in the output.
     // Edgecase is a literal block that is completely on a single line, like '{Hello}', in which case we want to
     // preserve the newline.
-    if (block->segments.size() > 1 && *tmsu_find_first_not_of(tokenizer->current, WHITESPACE_NO_NEWLINE) == '\n') {
+    if (block->segments.size() > 1
+        && *tmsu_find_first_not_of(tokenizer->current, WHITESPACE_NO_NEWLINE.first) == '\n') {
         ++parsing->skip_next_newlines_amount;
     }
 }
@@ -806,7 +807,7 @@ parse_result parse_literal_block(tokenizer_t* tokenizer, parsing_state_t* parsin
                 continue;
             }
             case '\n': {
-                if (tmsu_find_first_not_of_n(start, next, WHITESPACE) != next) {
+                if (tmsu_find_first_not_of_v(tmsu_view_n(start, next), WHITESPACE) != next) {
                     add_literal_statement(current_segment, start, next, new_skip, true);
                     start = next;
                 }
@@ -845,7 +846,7 @@ parse_result parse_literal_block(tokenizer_t* tokenizer, parsing_state_t* parsin
         int spaces = 0;
         if (start != next) {
             // Check whether the space between two statements it just whitespace.
-            auto literal_start = tmsu_find_first_not_of_n(start, next, WHITESPACE);
+            auto literal_start = tmsu_find_first_not_of_v(tmsu_view_n(start, next), WHITESPACE);
 
             // We collapse all whitespace to spaces.
             if (!current_segment->statements.empty()) spaces = (int)(literal_start - start);
@@ -881,7 +882,7 @@ parse_result parse_literal_block(tokenizer_t* tokenizer, parsing_state_t* parsin
     }
 
     // Check if there is remaining content that needs to be output.
-    if (tmsu_find_first_not_of_n(start, tokenizer->current, WHITESPACE) != tokenizer->current) {
+    if (tmsu_find_first_not_of_v(tmsu_view_n(start, tokenizer->current), WHITESPACE) != tokenizer->current) {
         add_literal_statement(current_segment, start, tokenizer->current, new_skip, true);
     }
 

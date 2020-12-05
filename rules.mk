@@ -1,9 +1,9 @@
-# Configurable submodule makefile for use with platform.mk.
+# Configurable summodule makefile for use with platform.mk.
 
 # Configurable variables.
 tg_build ?= ${BUILD}
 tg_src ?= src/
-tg_external ?= external/
+tg_external ?= ${EXTERNAL_FOLDER}
 tg_executable ?= tg
 
 # Dependencies

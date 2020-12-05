@@ -155,8 +155,8 @@ void increment(tokenizer_t* tokenizer) {
     ++tokenizer->location.column;
 }
 
-static char const* const WHITESPACE = " \t\n\v\f\r";
-static char const* const WHITESPACE_NO_NEWLINE = " \t\v\f\r";
+static const tmsu_view_t WHITESPACE = tmsu_view(" \t\n\v\f\r");
+static const tmsu_view_t WHITESPACE_NO_NEWLINE = tmsu_view(" \t\v\f\r");
 
 void skip_whitespace(tokenizer_t* tokenizer) {
     assert(tokenizer);
@@ -166,7 +166,7 @@ void skip_whitespace(tokenizer_t* tokenizer) {
     const char* prev = next;
     for (;;) {
         prev = next;
-        next = tmsu_find_first_not_of(prev, WHITESPACE_NO_NEWLINE);
+        next = tmsu_find_first_not_of(prev, WHITESPACE_NO_NEWLINE.first);
         if (*next != '\n') break;
         ++next;
         tokenizer->location.column = 0;
@@ -230,10 +230,10 @@ whitespace_state skip_empty_lines_and_count_indentation(tokenizer_t* tokenizer, 
     return result;
 }
 
-bool is_identifier_first_char(char c) { return isalpha(c) || (c == '_'); }
-bool is_identifier_char(char c) { return isalnum(c) || (c == '_'); }
+bool is_identifier_first_char(char c) { return isalpha((uint8_t)c) || (c == '_'); }
+bool is_identifier_char(char c) { return isalnum((uint8_t)c) || (c == '_'); }
 bool is_other_char(char c) {
-    return !(isalnum(c) || c == '_' || c == '"' || c == ':' || c == ';' || c == '(' || c == ')' || c == '{' ||
+    return !(isalnum((uint8_t)c) || c == '_' || c == '"' || c == ':' || c == ';' || c == '(' || c == ')' || c == '{' ||
              c == '}' || c == '[' || c == ']' || c == '?');
 }
 

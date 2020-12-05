@@ -21,6 +21,13 @@ FIXME:
 #include <cctype>
 #include <cstdarg>
 
+/* POSIX */
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
 /* stl */
 #include <vector>
 #include <memory>
@@ -153,25 +160,9 @@ constexpr const parse_result pr_no_match = parse_result::no_match;
 
 #include "invoke.cpp"
 
-bool parse_source_file(parsing_state_t* parsing, int file_index) {
-    // Parsing of the file might add new files, which would invalidate any references into the array.
-    // That is why we just refer to the source file by index.
+bool parse_contents(parsing_state_t* parsing, int file_index) {
     auto data = parsing->data;
     auto filename = data->source_files[file_index].filename;
-    assert(!data->source_files[file_index].parsed);
-
-    // Files read with tmu are always null terminated.
-    auto script = tmu_read_file_as_utf8_managed(filename);
-    if (script.ec != TM_OK) {
-        print(stderr, "Failed to load script file \"{}\".\n", filename);
-        return false;
-    }
-
-    auto persistent_contents = monotonic_new_array<char>(script.contents.size + 1);
-    memcpy(persistent_contents, script.contents.data, script.contents.size + 1);  // Copy including null terminator.
-
-    data->source_files[file_index].contents = {persistent_contents, script.contents.size};
-
     auto tokenizer = make_tokenizer(data->source_files[file_index]);
 
     auto pr = parse_toplevel_statements(&tokenizer, parsing, &data->toplevel_segment);
@@ -180,22 +171,72 @@ bool parse_source_file(parsing_state_t* parsing, int file_index) {
         assert(parsing->current_symbol_table == 0);  // If this assertion hits, push_scope and pop_scope aren't matched.
     }
 
-    if (pr == pr_error) printf("%.*s: Failure.\n", PRINT_SW(filename));
+    if (pr == pr_error) {
+        if (filename.empty()) {
+            tmu_fprintf(stderr, "Failure.\n");
+        } else {
+            tmu_fprintf(stderr, "%.*s: Failure.\n", PRINT_SW(filename));
+        }
+    }
     data->valid = (pr == pr_success);
     data->source_files[file_index].parsed = (pr == pr_success);
 
     return (pr == pr_success);
 }
 
+bool parse_source_file(parsing_state_t* parsing, int file_index) {
+    // Parsing of the file might add new files, which would invalidate any references into the array.
+    // That is why we just refer to the source file by index.
+    auto data = parsing->data;
+    auto filename = data->source_files[file_index].filename;
+    assert(!data->source_files[file_index].parsed);
+
+    // Files read with tmu are always null terminated.
+    auto script = tml::make_resource(tmu_read_file_as_utf8(filename));
+    if (script->ec != TM_OK) {
+        print(stderr, "Failed to load script file \"{}\".\n", filename);
+        return false;
+    }
+
+    auto persistent_contents = monotonic_new_array<char>(script->contents.size + 1);
+    memcpy(persistent_contents, script->contents.data, script->contents.size + 1);  // Copy including null terminator.
+
+    data->source_files[file_index].contents = {persistent_contents, script->contents.size};
+
+    return parse_contents(parsing, file_index);
+}
+
 bool parse_file(parsed_state_t* parsed, string_view filename) {
     assert(parsed);
+
+    if (parsed->verbose) {
+        print(stdout, "Parsing \"{}\".\n", filename);
+    }
+
+    parsing_state_t parsing = {parsed};
+    parsing.current_stack_size = parsed->toplevel_stack_size;
+    auto& source_files = parsed->source_files;
+    source_files.push_back({/*contents=*/{}, filename, /*file_index=*/0, /*parsed=*/false});
+    if (parse_source_file(&parsing, (int)source_files.size() - 1)) {
+        parsed->toplevel_stack_size = parsing.current_stack_size;
+        return true;
+    }
+    return false;
+}
+
+bool parse_inplace(parsed_state_t* parsed, string_view contents) {
+    assert(parsed);
+
+    if (parsed->verbose) {
+        print(stdout, "Parsing piped input.\n");
+    }
 
     parsing_state_t parsing = {parsed};
     parsing.current_stack_size = parsed->toplevel_stack_size;
     auto& source_files = parsed->source_files;
     assert(source_files.empty());
-    source_files.push_back({/*contents=*/{}, filename, /*file_index=*/0, /*parsed=*/false});
-    if (parse_source_file(&parsing, 0)) {
+    source_files.push_back({contents, {}, /*file_index=*/0, /*parsed=*/false});
+    if (parse_contents(&parsing, 0)) {
         parsed->toplevel_stack_size = parsing.current_stack_size;
         return true;
     }

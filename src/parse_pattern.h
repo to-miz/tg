@@ -109,7 +109,7 @@ const char* string_match_get_end_of_expression(const char* current) {
                 break;
             }
             default: {
-                current = tmsu_find_first_not_of(current, WHITESPACE);
+                current = tmsu_find_first_not_of(current, WHITESPACE.first);
                 if (!*current) return current;
                 break;
             }
@@ -173,7 +173,7 @@ bool string_match_pattern(const match_type_definition_t& definition, string_matc
                     int16_t words_detected = 0;
                     for (int i = 0; i < iterations; ++i) {
                         auto current = matcher->current;
-                        auto word_end = tmsu_find_first_of_n(current, last, WHITESPACE);
+                        auto word_end = tmsu_find_first_of_v(tmsu_view_n(current, last), WHITESPACE);
                         if (current != word_end) {
                             if (i != 0) value += ' ';
                             value.insert(value.end(), current, word_end);
@@ -235,7 +235,7 @@ bool string_match_pattern(const match_type_definition_t& definition, string_matc
                 case mt_raw: {
                     skip_whitespace(matcher);
                     auto current = matcher->current;
-                    auto word_end = tmsu_find_first_of_n(current, last, WHITESPACE);
+                    auto word_end = tmsu_find_first_of_v(tmsu_view_n(current, last), WHITESPACE);
                     if (entry.contents != string_view{current, word_end}) {
                         if (local_print_error) {
                             auto msg = print_string("Tokens do not match pattern: \"%.*s\".", PRINT_SW(entry.contents));

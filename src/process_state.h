@@ -14,7 +14,7 @@ struct output_whitespace_context {
 };
 
 struct output_context {
-    FILE* stream = nullptr;
+    std::string stream;
     vector<nested_for_statement_entry> nested_for_statements;
 
     output_whitespace_context whitespace;
@@ -52,10 +52,14 @@ struct process_state_t {
     // Execution/output contexts.
     vector<value_storage> value_stack;
     output_context output;
+    bool verbose = false;
 
     process_state_t() = default;
     process_state_t(const process_state_t&) = delete;
-    process_state_t(parsed_state_t* data) : data(data) { assert(data); }
+    process_state_t(parsed_state_t* data) : data(data) {
+        assert(data);
+        verbose = data->verbose;
+    }
 
     int set_scope(int index) {
         auto prev = current_symbol_table;

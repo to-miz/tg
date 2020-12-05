@@ -144,7 +144,7 @@ any_t string_call_trim(array_view<any_t> arguments) {
     auto lhs = arguments[0].dereference();
     auto& str = lhs->as_string();
     auto trimmed = tmsu_trim_n(str.data(), str.data() + str.size());
-    return make_any(std::string(trimmed.begin(), trimmed.end()));
+    return make_any(std::string(trimmed.first, trimmed.last));
 }
 
 any_t string_call_trim_left(array_view<any_t> arguments) {
@@ -200,16 +200,16 @@ any_t string_call_split(array_view<any_t> arguments) {
 
     vector<any_t> result;
 
-    auto tokenizer = tmsu_make_tokenizer(str.c_str());
-    string_view token = {};
+    auto tokenizer = tmsu_tokenizer(str.c_str());
+    tmsu_view_t token = {};
     while (tmsu_next_token(&tokenizer, delimiters_str, &token)) {
-        result.push_back(make_any(std::string(token.begin(), token.end())));
+        result.push_back(make_any(std::string(token.first, token.last)));
     }
 
     return make_any(std::move(result), {tid_string, 1});
 }
 
-bool case_next_word(tmsu_tokenizer* tokenizer, string_view* out) {
+bool case_next_word(tmsu_tokenizer_t* tokenizer, string_view* out) {
     const char* p = tokenizer->current;
     if (!p || *p == 0) return false;
 
@@ -274,7 +274,7 @@ any_t string_camel_case_call(array_view<any_t> arguments) {
     assert(lhs->type.is(tid_string, 0));
 
     string result;
-    auto tokenizer = tmsu_make_tokenizer(lhs->as_string().c_str());
+    auto tokenizer = tmsu_tokenizer(lhs->as_string().c_str());
     string_view word_view = {};
     bool not_first = false;
     while (case_next_word(&tokenizer, &word_view)) {
@@ -291,7 +291,7 @@ any_t string_pascal_case_call(array_view<any_t> arguments) {
     assert(lhs->type.is(tid_string, 0));
 
     string result;
-    auto tokenizer = tmsu_make_tokenizer(lhs->as_string().c_str());
+    auto tokenizer = tmsu_tokenizer(lhs->as_string().c_str());
     string_view word_view = {};
     while (case_next_word(&tokenizer, &word_view)) {
         auto word = to_lower(word_view);
@@ -306,7 +306,7 @@ any_t string_snake_case_call(array_view<any_t> arguments) {
     assert(lhs->type.is(tid_string, 0));
 
     string result;
-    auto tokenizer = tmsu_make_tokenizer(lhs->as_string().c_str());
+    auto tokenizer = tmsu_tokenizer(lhs->as_string().c_str());
     string_view word_view = {};
     bool not_first = false;
     while (case_next_word(&tokenizer, &word_view)) {
@@ -323,7 +323,7 @@ any_t string_macro_case_call(array_view<any_t> arguments) {
     assert(lhs->type.is(tid_string, 0));
 
     string result;
-    auto tokenizer = tmsu_make_tokenizer(lhs->as_string().c_str());
+    auto tokenizer = tmsu_tokenizer(lhs->as_string().c_str());
     string_view word_view = {};
     bool not_first = false;
     while (case_next_word(&tokenizer, &word_view)) {
@@ -340,7 +340,7 @@ any_t string_kebab_case_call(array_view<any_t> arguments) {
     assert(lhs->type.is(tid_string, 0));
 
     string result;
-    auto tokenizer = tmsu_make_tokenizer(lhs->as_string().c_str());
+    auto tokenizer = tmsu_tokenizer(lhs->as_string().c_str());
     string_view word_view = {};
     bool not_first = false;
     while (case_next_word(&tokenizer, &word_view)) {
@@ -435,6 +435,18 @@ any_t string_call_find(array_view<any_t> arguments) {
     return make_any((int)lhs.find(rhs));
 }
 
+any_t string_call_escape(array_view<any_t> arguments) {
+    auto& lhs = arguments[0].dereference()->as_string();
+    std::string result;
+    result.reserve(lhs.size());
+    for (auto c : lhs) {
+        if (c == '"')  result.push_back('\\');
+        if (c == '\\') result.push_back('\\');
+        result.push_back(c);
+    }
+    return make_any(result);
+}
+
 void init_builtin_string(builtin_type_t* type) {
     type->name = "string";
     type->properties = {{"size", {tid_int, 0}, string_get_size_property}};
@@ -450,6 +462,7 @@ void init_builtin_string(builtin_type_t* type) {
         {"starts_with", 1, 1, string_check_starts_with, string_call_starts_with},
         {"substr", 1, 2, string_are_arguments_int, string_call_substr},
         {"find", 1, 1, string_find_args, string_call_find},
+        {"escape", 0, 0, string_no_arguments_method, string_call_escape},
 
         {"camel_case", 0, 0, string_no_arguments_method, string_camel_case_call},
         {"pascal_case", 0, 0, string_no_arguments_method, string_pascal_case_call},
